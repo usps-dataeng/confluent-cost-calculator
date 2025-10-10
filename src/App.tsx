@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Calculator, Server, Database, Network, DollarSign, TrendingUp, Upload, Settings } from 'lucide-react';
+import { Calculator, Server, Database, Network, DollarSign, TrendingUp, Upload, Settings, Download } from 'lucide-react';
 import { parseCSV, ParsedData } from './utils/csvParser';
+import { generateCostProjectionCSV, downloadCSV, generateExportFilename } from './utils/exportData';
 import topicListCSV from './assets/Topic_list.csv?raw';
 
 interface TShirtSize {
@@ -24,6 +25,7 @@ function App() {
   const [tshirtSizes, setTshirtSizes] = useState<Record<string, TShirtSize>>(DEFAULT_TSHIRT_SIZES);
   const [showSettings, setShowSettings] = useState(false);
   const [editingSizes, setEditingSizes] = useState<Record<string, TShirtSize>>(DEFAULT_TSHIRT_SIZES);
+  const [annualIncreaseRate, setAnnualIncreaseRate] = useState<string>('3');
 
   useEffect(() => {
     const data = parseCSV(topicListCSV);
@@ -51,6 +53,21 @@ function App() {
   const handleResetSettings = () => {
     setEditingSizes(DEFAULT_TSHIRT_SIZES);
     setTshirtSizes(DEFAULT_TSHIRT_SIZES);
+  };
+
+  const handleExport = () => {
+    const csvContent = generateCostProjectionCSV({
+      selectedSize,
+      partitions: sizeConfig.partitions,
+      storageGB: sizeConfig.storageGB,
+      yearlyComputeCost: parseFloat(yearlyComputeCost) || 0,
+      yearlyStorageCost: parseFloat(yearlyStorageCost) || 0,
+      costs,
+      annualIncreaseRate: parseFloat(annualIncreaseRate) / 100 || 0.03,
+    });
+
+    const filename = generateExportFilename();
+    downloadCSV(csvContent, filename);
   };
 
   if (!parsedData) {
@@ -103,6 +120,13 @@ function App() {
               <p className="text-slate-400 text-lg">T-Shirt Sizing ROM (Rough Order of Magnitude)</p>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              >
+                <Download className="w-5 h-5" />
+                <span>Export 7-Year</span>
+              </button>
               <label className="cursor-pointer">
                 <input
                   type="file"
@@ -174,6 +198,22 @@ function App() {
                     className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-8 pr-4 py-2 text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-2">Annual Increase Rate (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={annualIncreaseRate}
+                    onChange={(e) => setAnnualIncreaseRate(e.target.value)}
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">Used for 7-year cost projection</div>
               </div>
             </div>
           </div>
