@@ -22,11 +22,10 @@ export function generateCostProjectionCSV(config: ExportConfig): string {
     partitions,
     storageGB,
     costs,
-    annualIncreaseRate = 0.03
+    annualIncreaseRate = 0.034
   } = config;
 
   const currentYear = new Date().getFullYear();
-  const monthlyIncreaseRate = 0.034;
   const csvRows: string[] = [];
 
   csvRows.push('Confluent Cloud Cost Calculator - 7 Year Projection');
@@ -35,7 +34,6 @@ export function generateCostProjectionCSV(config: ExportConfig): string {
   csvRows.push(`Partitions:,${partitions}`);
   csvRows.push(`Storage (GB):,${storageGB}`);
   csvRows.push(`Annual Increase Rate:,${(annualIncreaseRate * 100).toFixed(1)}%`);
-  csvRows.push(`Monthly Increase Rate:,${(monthlyIncreaseRate * 100).toFixed(1)}%`);
   csvRows.push('');
 
   csvRows.push('Current Year Cost Breakdown');
@@ -78,19 +76,12 @@ export function generateCostProjectionCSV(config: ExportConfig): string {
 
   for (let year = 0; year < 7; year++) {
     const yearLabel = currentYear + year;
-    const baseMonthly = costs.totalMonthly;
-    const monthlyValues: string[] = [];
-    let annualTotal = 0;
+    const multiplier = Math.pow(1 + annualIncreaseRate, year);
+    const totalAnnual = costs.totalYearly * multiplier;
+    const monthlyAvg = totalAnnual / 12;
 
-    for (let month = 0; month < 12; month++) {
-      const monthsFromStart = year * 12 + month;
-      const multiplier = Math.pow(1 + monthlyIncreaseRate, monthsFromStart);
-      const monthlyCost = baseMonthly * multiplier;
-      monthlyValues.push(`$${monthlyCost.toFixed(2)}`);
-      annualTotal += monthlyCost;
-    }
-
-    csvRows.push(`${yearLabel},${monthlyValues.join(',')},$${annualTotal.toFixed(2)}`);
+    const monthlyValues = Array(12).fill(`$${monthlyAvg.toFixed(2)}`).join(',');
+    csvRows.push(`${yearLabel},${monthlyValues},$${totalAnnual.toFixed(2)}`);
   }
 
   return csvRows.join('\n');
