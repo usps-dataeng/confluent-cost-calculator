@@ -2,16 +2,31 @@ interface CostData {
   compute: number;
   storage: number;
   network: number;
+  governance: number;
   totalYearly: number;
   totalMonthly: number;
+}
+
+interface CKUConfig {
+  azureCKUs: number;
+  azureRate: number;
+  gcpCKUs: number;
+  gcpRate: number;
+}
+
+interface FlatCosts {
+  storage: number;
+  network: number;
+  networkMultiplier: number;
+  governance: number;
 }
 
 interface ExportConfig {
   selectedSize: string;
   partitions: number;
   storageGB: number;
-  yearlyComputeCost: number;
-  yearlyStorageCost: number;
+  ckuConfig: CKUConfig;
+  flatCosts: FlatCosts;
   costs: CostData;
   annualIncreaseRate?: number;
 }
@@ -21,6 +36,7 @@ export function generateCostProjectionCSV(config: ExportConfig): string {
     selectedSize,
     partitions,
     storageGB,
+    ckuConfig,
     costs,
     annualIncreaseRate = 0.034
   } = config;
@@ -36,16 +52,24 @@ export function generateCostProjectionCSV(config: ExportConfig): string {
   csvRows.push(`Annual Increase Rate:,${(annualIncreaseRate * 100).toFixed(1)}%`);
   csvRows.push('');
 
+  csvRows.push('CKU Configuration');
+  csvRows.push(`Azure CKUs:,${ckuConfig.azureCKUs}`);
+  csvRows.push(`Azure Rate ($/CKU/Month):,$${ckuConfig.azureRate}`);
+  csvRows.push(`GCP CKUs:,${ckuConfig.gcpCKUs}`);
+  csvRows.push(`GCP Rate ($/CKU/Month):,$${ckuConfig.gcpRate}`);
+  csvRows.push('');
+
   csvRows.push('Current Year Cost Breakdown');
   csvRows.push('Category,Annual Cost,Monthly Cost');
-  csvRows.push(`Compute,$${costs.compute.toFixed(2)},$${(costs.compute / 12).toFixed(2)}`);
+  csvRows.push(`Compute (CKU),$${costs.compute.toFixed(2)},$${(costs.compute / 12).toFixed(2)}`);
   csvRows.push(`Storage,$${costs.storage.toFixed(2)},$${(costs.storage / 12).toFixed(2)}`);
   csvRows.push(`Network,$${costs.network.toFixed(2)},$${(costs.network / 12).toFixed(2)}`);
+  csvRows.push(`Governance,$${costs.governance.toFixed(2)},$${(costs.governance / 12).toFixed(2)}`);
   csvRows.push(`Total,$${costs.totalYearly.toFixed(2)},$${costs.totalMonthly.toFixed(2)}`);
   csvRows.push('');
 
   csvRows.push('7-Year Cost Projection');
-  csvRows.push('Year,Compute Cost,Storage Cost,Network Cost,Total Annual Cost,Cumulative Cost');
+  csvRows.push('Year,Compute Cost,Storage Cost,Network Cost,Governance Cost,Total Annual Cost,Cumulative Cost');
 
   let cumulativeCost = 0;
 
@@ -56,7 +80,8 @@ export function generateCostProjectionCSV(config: ExportConfig): string {
     const computeCost = costs.compute * multiplier;
     const storageCost = costs.storage * multiplier;
     const networkCost = costs.network * multiplier;
-    const totalCost = computeCost + storageCost + networkCost;
+    const governanceCost = costs.governance * multiplier;
+    const totalCost = computeCost + storageCost + networkCost + governanceCost;
 
     cumulativeCost += totalCost;
 
@@ -65,6 +90,7 @@ export function generateCostProjectionCSV(config: ExportConfig): string {
       `$${computeCost.toFixed(2)},` +
       `$${storageCost.toFixed(2)},` +
       `$${networkCost.toFixed(2)},` +
+      `$${governanceCost.toFixed(2)},` +
       `$${totalCost.toFixed(2)},` +
       `$${cumulativeCost.toFixed(2)}`
     );
