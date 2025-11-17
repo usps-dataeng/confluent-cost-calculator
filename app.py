@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from utils.csv_parser import parse_csv_file, parse_databricks_table
 from utils.export_data import generate_cost_projection_csv
+from utils.rom_export import generate_rom_export
 
 # Default T-shirt sizes
 DEFAULT_TSHIRT_SIZES = {
@@ -62,6 +63,22 @@ if 'cku_config' not in st.session_state:
     st.session_state.cku_config = DEFAULT_CKU_CONFIG.copy()
 if 'flat_costs' not in st.session_state:
     st.session_state.flat_costs = DEFAULT_FLAT_COSTS.copy()
+if 'rom_config' not in st.session_state:
+    st.session_state.rom_config = {
+        'inbound_feeds': 1,
+        'outbound_feeds': 1,
+        'de_hourly_rate': 80,
+        'inbound_hours': 296,
+        'outbound_hours': 254,
+        'normalization_hours': 27.9,
+        'workspace_setup_cost': 8000,
+        'confluent_annual_cost': 11709,
+        'gcp_per_feed_annual_cost': 9279,
+        'escalation_rate': 0.034,
+        'start_year': 2025
+    }
+if 'show_rom_settings' not in st.session_state:
+    st.session_state.show_rom_settings = False
 
 # Custom CSS
 st.markdown("""
@@ -138,13 +155,16 @@ with st.sidebar:
     st.divider()
     
     # Settings toggles
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("👕 Sizes", use_container_width=True):
             st.session_state.show_settings = not st.session_state.show_settings
     with col2:
         if st.button("💰 Costs", use_container_width=True):
             st.session_state.show_cost_settings = not st.session_state.show_cost_settings
+    with col3:
+        if st.button("📊 ROM", use_container_width=True):
+            st.session_state.show_rom_settings = not st.session_state.show_rom_settings
 
 # Check if data is loaded
 if st.session_state.parsed_data is None:
@@ -305,6 +325,104 @@ if st.session_state.show_cost_settings:
         st.session_state.flat_costs = DEFAULT_FLAT_COSTS.copy()
         st.rerun()
     
+    st.divider()
+
+# ROM Settings panel
+if st.session_state.show_rom_settings:
+    st.header("📊 ROM Configuration")
+
+    st.info("⚙️ Configure ROM (Rough Order of Magnitude) settings for feed-based cost estimation.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Feed Configuration")
+        st.session_state.rom_config['inbound_feeds'] = st.number_input(
+            "Inbound Feeds",
+            value=st.session_state.rom_config['inbound_feeds'],
+            min_value=0,
+            step=1,
+            key="rom_inbound_feeds"
+        )
+        st.session_state.rom_config['outbound_feeds'] = st.number_input(
+            "Outbound Feeds",
+            value=st.session_state.rom_config['outbound_feeds'],
+            min_value=0,
+            step=1,
+            key="rom_outbound_feeds"
+        )
+
+        st.subheader("Data Engineering")
+        st.session_state.rom_config['de_hourly_rate'] = st.number_input(
+            "Hourly Rate ($)",
+            value=st.session_state.rom_config['de_hourly_rate'],
+            min_value=0,
+            step=5,
+            key="rom_hourly_rate"
+        )
+        st.session_state.rom_config['inbound_hours'] = st.number_input(
+            "Inbound Feed Hours",
+            value=float(st.session_state.rom_config['inbound_hours']),
+            min_value=0.0,
+            step=10.0,
+            key="rom_inbound_hours"
+        )
+        st.session_state.rom_config['outbound_hours'] = st.number_input(
+            "Outbound Feed Hours",
+            value=float(st.session_state.rom_config['outbound_hours']),
+            min_value=0.0,
+            step=10.0,
+            key="rom_outbound_hours"
+        )
+        st.session_state.rom_config['normalization_hours'] = st.number_input(
+            "Normalization Hours",
+            value=float(st.session_state.rom_config['normalization_hours']),
+            min_value=0.0,
+            step=1.0,
+            key="rom_norm_hours"
+        )
+
+    with col2:
+        st.subheader("Setup & Infrastructure")
+        st.session_state.rom_config['workspace_setup_cost'] = st.number_input(
+            "Workspace Setup Cost ($)",
+            value=st.session_state.rom_config['workspace_setup_cost'],
+            min_value=0,
+            step=100,
+            key="rom_workspace_cost"
+        )
+        st.session_state.rom_config['confluent_annual_cost'] = st.number_input(
+            "Confluent Annual Cost ($)",
+            value=st.session_state.rom_config['confluent_annual_cost'],
+            min_value=0,
+            step=100,
+            key="rom_confluent_cost"
+        )
+        st.session_state.rom_config['gcp_per_feed_annual_cost'] = st.number_input(
+            "GCP/GKE Per Feed Annual ($)",
+            value=st.session_state.rom_config['gcp_per_feed_annual_cost'],
+            min_value=0,
+            step=100,
+            key="rom_gcp_cost"
+        )
+        st.session_state.rom_config['escalation_rate'] = st.number_input(
+            "Escalation Rate (%)",
+            value=st.session_state.rom_config['escalation_rate'] * 100,
+            min_value=0.0,
+            max_value=100.0,
+            step=0.1,
+            format="%.1f",
+            key="rom_escalation"
+        ) / 100
+        st.session_state.rom_config['start_year'] = st.number_input(
+            "Start Year",
+            value=st.session_state.rom_config['start_year'],
+            min_value=2020,
+            max_value=2050,
+            step=1,
+            key="rom_start_year"
+        )
+
     st.divider()
 
 # Main content
@@ -503,7 +621,10 @@ with col2:
 
 # Export functionality
 st.divider()
-col1, col2 = st.columns([3, 1])
+st.markdown("## 📥 Export Options")
+
+col1, col2, col3 = st.columns([2, 1, 1])
+
 with col2:
     if st.button("📥 Export 7-Year Projection", use_container_width=True, type="primary"):
         csv_content = generate_cost_projection_csv(
@@ -515,12 +636,25 @@ with col2:
             costs=costs,
             annual_increase_rate=annual_increase_rate / 100
         )
-        
+
         filename = f"confluent-cost-projection-{st.session_state.selected_env}-{datetime.now().strftime('%Y-%m-%d')}.csv"
         st.download_button(
-            label="💾 Download CSV",
+            label="💾 Download Projection",
             data=csv_content,
             file_name=filename,
+            mime="text/csv",
+            use_container_width=True
+        )
+
+with col3:
+    if st.button("📊 Export ROM", use_container_width=True, type="secondary"):
+        rom_csv_content = generate_rom_export(st.session_state.rom_config)
+
+        rom_filename = f"confluent-rom-{datetime.now().strftime('%Y-%m-%d')}.csv"
+        st.download_button(
+            label="💾 Download ROM",
+            data=rom_csv_content,
+            file_name=rom_filename,
             mime="text/csv",
             use_container_width=True
         )
