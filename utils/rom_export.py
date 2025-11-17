@@ -1,6 +1,5 @@
 def format_in_thousands(value):
-    thousands = round(value / 1000)
-    return f"${thousands}"
+    return f"${value:,.0f}"
 
 def calculate_rom_costs(config):
     total_feeds = config['inbound_feeds'] + config['outbound_feeds']
