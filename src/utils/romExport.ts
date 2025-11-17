@@ -19,6 +19,11 @@ interface YearlyROMCost {
   total: number;
 }
 
+function formatInThousands(value: number): string {
+  const thousands = Math.round(value / 1000);
+  return `$${thousands}`;
+}
+
 function calculateROMCosts(config: ROMConfig): {
   initialInvestment: YearlyROMCost[];
   operatingVariance: YearlyROMCost[];
@@ -122,7 +127,7 @@ export function generateROMExport(config: ROMConfig): string {
 
   lines.push('INITIAL INVESTMENT EXPENSE');
   const initialDE = results.initialInvestment[0].dataEngineering;
-  const deLine = `Data Engineering,$${initialDE.toLocaleString()}` + ',,,,,,,,,,,' + `,$${initialDE.toLocaleString()}`;
+  const deLine = `Data Engineering,${formatInThousands(initialDE)}` + ',,,,,,,,,,,' + `,${formatInThousands(initialDE)}`;
   lines.push(deLine);
 
   lines.push('Data Strategy and Governance,,,,,,,,,,,,$-');
@@ -131,14 +136,14 @@ export function generateROMExport(config: ROMConfig): string {
   lines.push('Service Performance,,,,,,,,,,,,$-');
 
   const initialCloud = results.initialInvestment[0].cloudInfrastructure;
-  const cloudLine = 'Google Cloud Platform (GCP)';
-  const cloudCosts = results.operatingVariance.map((ov) => `$${Math.round(ov.cloudInfrastructure).toLocaleString()}`);
+  const cloudLine = 'GCP/GKE/Confluent';
+  const cloudCosts = results.operatingVariance.map((ov) => formatInThousands(ov.cloudInfrastructure));
   lines.push(
-    `${cloudLine},$${Math.round(initialCloud).toLocaleString()},${cloudCosts.join(',')},,,,,,$${Math.round(results.breakdown.cloudInfrastructure7Year).toLocaleString()}`
+    `${cloudLine},${formatInThousands(initialCloud)},${cloudCosts.join(',')},,,,,,${formatInThousands(results.breakdown.cloudInfrastructure7Year)}`
   );
 
   const initialTotal = results.initialInvestment[0].total;
-  const totalLine = `TOTAL,$${Math.round(initialTotal).toLocaleString()},${cloudCosts.join(',')},,,,,,$${Math.round(results.breakdown.totalProjectCost).toLocaleString()}`;
+  const totalLine = `TOTAL,${formatInThousands(initialTotal)},${cloudCosts.join(',')},,,,,,${formatInThousands(results.breakdown.totalProjectCost)}`;
   lines.push(totalLine);
 
   lines.push('');
@@ -148,15 +153,15 @@ export function generateROMExport(config: ROMConfig): string {
   lines.push('OPERATING VARIANCE');
 
   const opVarLine = 'Data Engineering';
-  const opVarCosts = results.operatingVariance.map((ov) => `$${Math.round(ov.cloudInfrastructure).toLocaleString()}`);
-  lines.push(`${opVarLine},,${ opVarCosts.join(',')},,,,,,$${Math.round(results.breakdown.operatingVariance6Year).toLocaleString()}`);
+  const opVarCosts = results.operatingVariance.map((ov) => formatInThousands(ov.cloudInfrastructure));
+  lines.push(`${opVarLine},,${opVarCosts.join(',')},,,,,,${formatInThousands(results.breakdown.operatingVariance6Year)}`);
 
   lines.push('Data Strategy and Governance,,,,,,,,,,,,$-');
   lines.push('Enterprise Reporting and Dashboard,,,,,,,,,,,,$-');
   lines.push('Advance Modeling,,,,,,,,,,,,$-');
   lines.push('Service Performance,,,,,,,,,,,,$-');
 
-  const opVarTotal = `TOTAL,,${ opVarCosts.join(',')},,,,,,$${Math.round(results.breakdown.operatingVariance6Year).toLocaleString()}`;
+  const opVarTotal = `TOTAL,,${opVarCosts.join(',')},,,,,,${formatInThousands(results.breakdown.operatingVariance6Year)}`;
   lines.push(opVarTotal);
 
   lines.push('');
@@ -164,9 +169,9 @@ export function generateROMExport(config: ROMConfig): string {
 
   lines.push('Summary');
   lines.push(`Capital,$-`);
-  lines.push(`Expense,$${Math.round(results.breakdown.totalProjectCost).toLocaleString()}`);
-  lines.push(`Variance,$${Math.round(results.breakdown.operatingVariance6Year).toLocaleString()}`);
-  lines.push(`Total,$${Math.round(results.breakdown.totalProjectCost).toLocaleString()}`);
+  lines.push(`Expense,${formatInThousands(results.breakdown.totalProjectCost)}`);
+  lines.push(`Variance,${formatInThousands(results.breakdown.operatingVariance6Year)}`);
+  lines.push(`Total,${formatInThousands(results.breakdown.totalProjectCost)}`);
 
   lines.push('');
   lines.push('');
@@ -184,33 +189,33 @@ export function generateROMExport(config: ROMConfig): string {
   lines.push(`3,Includes event data with facility impacts and workflow approvals`);
   lines.push(`4,Feed includes data normalization and standardization requirements`);
   lines.push(`5,Workspace/Environment setup costs included`);
-  lines.push(`6,Confluent platform required for real-time streaming: $${config.confluentAnnualCost.toLocaleString()} per feed per year`);
-  lines.push(`7,GCP/GKE infrastructure cost: $${config.gcpPerFeedAnnualCost.toLocaleString()} per feed per year for compute and storage`);
+  lines.push(`6,Confluent platform required for real-time streaming: ${formatInThousands(config.confluentAnnualCost)} per feed per year`);
+  lines.push(`7,GCP/GKE infrastructure cost: ${formatInThousands(config.gcpPerFeedAnnualCost)} per feed per year for compute and storage`);
   lines.push(`8,ROM based on current understanding of high level requirements & known attributes`);
   lines.push(`9,As requirements are refined/finalized the ROM may need to be revised`);
 
   lines.push('');
   lines.push('Timeline');
-  lines.push(`FY${config.startYear}-FY${config.startYear + 5}`);
-  lines.push(`12,FY${config.startYear}: $${Math.round(initialTotal).toLocaleString()} (Data Engineering + Cloud infrastructure setup - starting in 3 weeks)`);
-  lines.push(`13,FY${config.startYear + 1}-${config.startYear + 5}: $${Math.round(results.breakdown.operatingVariance6Year / 6).toLocaleString()} annually (ongoing cloud operations with ${(config.escalationRate * 100).toFixed(1)}% escalation) plus Operating Variance`);
+  lines.push(`FY${config.startYear}-FY${config.startYear + 6}`);
+  lines.push(`12,FY${config.startYear}: ${formatInThousands(initialTotal)} (Data Engineering + Cloud infrastructure setup - starting in 3 weeks)`);
+  lines.push(`13,FY${config.startYear + 1}-${config.startYear + 6}: ${formatInThousands(results.breakdown.operatingVariance6Year / 6)} annually (ongoing cloud operations with ${(config.escalationRate * 100).toFixed(1)}% escalation) plus Operating Variance`);
 
   lines.push('');
   lines.push('Cost Breakdown per Feed:');
-  lines.push(`14,Create inbound ingest: $${Math.round(config.inboundHours * config.deHourlyRate).toLocaleString()} (${config.inboundHours} hours)`);
-  lines.push(`15,Create outbound enterprise data assets: $${Math.round(config.outboundHours * config.deHourlyRate).toLocaleString()} (${config.outboundHours} hours)`);
-  lines.push(`16,Data normalization and standardization: $${Math.round(results.breakdown.normalizationCost).toLocaleString()} (${config.normalizationHours} hours - ${results.totalFeeds} feeds)`);
-  lines.push(`17,Workspace/Environment/Subscription Prep: $${config.workspaceSetupCost.toLocaleString()}`);
-  lines.push(`18,Annual Confluent platform cost: $${config.confluentAnnualCost.toLocaleString()}`);
-  lines.push(`19,Annual GCP/GKE cost: $${config.gcpPerFeedAnnualCost.toLocaleString()} per feed`);
+  lines.push(`14,Create inbound ingest: ${formatInThousands(config.inboundHours * config.deHourlyRate)},${Math.round(config.inboundHours)} (${Math.round(config.inboundHours)} hours)`);
+  lines.push(`15,Create outbound enterprise data assets: ${formatInThousands(config.outboundHours * config.deHourlyRate)},${Math.round(config.outboundHours)} (${Math.round(config.outboundHours)} hours)`);
+  lines.push(`16,Data normalization and standardization: ${formatInThousands(results.breakdown.normalizationCost)},${Math.round(config.normalizationHours)} (${config.normalizationHours} hours - ${results.totalFeeds} feeds)`);
+  lines.push(`17,Workspace/Environment/Subscription Prep: ${formatInThousands(config.workspaceSetupCost)}`);
+  lines.push(`18,Annual Confluent platform cost: ${formatInThousands(config.confluentAnnualCost)},${Math.round(config.confluentAnnualCost)}`);
+  lines.push(`19,Annual GCP/GKE cost: ${formatInThousands(config.gcpPerFeedAnnualCost)},${Math.round(config.gcpPerFeedAnnualCost)} per feed`);
 
   lines.push('');
   lines.push(`Total ${results.totalFeeds}-Feed Investment`);
-  lines.push(`1-Feed Investment`);
-  lines.push(`21,Data Engineering: $${Math.round(results.breakdown.oneTimeDevelopment).toLocaleString()} (one-time development)`);
-  lines.push(`18,Cloud Infrastructure: $${Math.round(results.breakdown.cloudInfrastructure7Year).toLocaleString()} (7-year operational costs with ${(config.escalationRate * 100).toFixed(1)}% escalation)`);
-  lines.push(`19,Operating Variance: $${Math.round(results.breakdown.operatingVariance6Year).toLocaleString()} (6-year escalated costs)`);
-  lines.push(`20,Total Project Cost: $${Math.round(results.breakdown.totalProjectCost).toLocaleString()}`);
+  lines.push(`${results.totalFeeds}-Feed Investment`);
+  lines.push(`21,Data Engineering: ${formatInThousands(results.breakdown.oneTimeDevelopment)},${Math.round(results.breakdown.oneTimeDevelopment / 1000)} (one-time development)`);
+  lines.push(`22,Cloud Infrastructure: ${formatInThousands(results.breakdown.cloudInfrastructure7Year)},${Math.round(results.breakdown.cloudInfrastructure7Year / 1000)} (7-year operational costs with ${(config.escalationRate * 100).toFixed(1)}% escalation)`);
+  lines.push(`23,Operating Variance: ${formatInThousands(results.breakdown.operatingVariance6Year)},${Math.round(results.breakdown.operatingVariance6Year / 1000)} (6-year escalated costs)`);
+  lines.push(`24,Total Project Cost: ${formatInThousands(results.breakdown.totalProjectCost)},${Math.round(results.breakdown.totalProjectCost / 1000)}`);
 
   return lines.join('\n');
 }
