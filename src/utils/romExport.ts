@@ -20,8 +20,7 @@ interface YearlyROMCost {
 }
 
 function formatInThousands(value: number): string {
-  const thousands = Math.round(value / 1000);
-  return `$${thousands}`;
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 function calculateROMCosts(config: ROMConfig): {
