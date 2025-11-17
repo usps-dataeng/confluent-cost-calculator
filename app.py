@@ -82,6 +82,10 @@ st.markdown("""
         padding: 1rem;
         border-radius: 0.5rem;
         border-left: 4px solid #1E88E5;
+        color: #262730;
+    }
+    .metric-card h2, .metric-card h4 {
+        color: #262730;
     }
     .cost-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
