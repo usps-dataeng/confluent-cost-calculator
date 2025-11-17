@@ -39,6 +39,21 @@ DEFAULT_INGESTION_RATES = {
     'XX-Large': {'inbound': 1500, 'outbound': 1500}
 }
 
+# Default ROM Configuration
+DEFAULT_ROM_CONFIG = {
+    'inbound_feeds': 1,
+    'outbound_feeds': 1,
+    'de_hourly_rate': 80,
+    'inbound_hours': 296,
+    'outbound_hours': 254,
+    'normalization_hours': 27.9,
+    'workspace_setup_cost': 8000,
+    'confluent_annual_cost': 11709,
+    'gcp_per_feed_annual_cost': 9279,
+    'escalation_rate': 0.034,
+    'start_year': datetime.now().year
+}
+
 # Page configuration
 st.set_page_config(
     page_title="Confluent Cloud Cost Calculator",
@@ -63,6 +78,10 @@ if 'cku_config' not in st.session_state:
     st.session_state.cku_config = DEFAULT_CKU_CONFIG.copy()
 if 'flat_costs' not in st.session_state:
     st.session_state.flat_costs = DEFAULT_FLAT_COSTS.copy()
+if 'rom_config' not in st.session_state:
+    st.session_state.rom_config = DEFAULT_ROM_CONFIG.copy()
+if 'show_rom_settings' not in st.session_state:
+    st.session_state.show_rom_settings = False
 
 # Custom CSS
 st.markdown("""
@@ -139,13 +158,16 @@ with st.sidebar:
     st.divider()
 
     # Settings toggles
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("👕 Sizes", use_container_width=True):
             st.session_state.show_settings = not st.session_state.show_settings
     with col2:
         if st.button("💰 Costs", use_container_width=True):
             st.session_state.show_cost_settings = not st.session_state.show_cost_settings
+    with col3:
+        if st.button("📊 ROM", use_container_width=True):
+            st.session_state.show_rom_settings = not st.session_state.show_rom_settings
 
 # Check if data is loaded
 if st.session_state.parsed_data is None:
@@ -304,6 +326,115 @@ if st.session_state.show_cost_settings:
     if st.button("🔄 Reset All Costs to Defaults", use_container_width=True):
         st.session_state.cku_config = DEFAULT_CKU_CONFIG.copy()
         st.session_state.flat_costs = DEFAULT_FLAT_COSTS.copy()
+        st.rerun()
+
+    st.divider()
+
+# ROM Settings panel (hidden by default)
+if st.session_state.show_rom_settings:
+    st.header("📊 ROM Configuration")
+
+    st.info("⚙️ Edit these settings to match your ROM requirements.")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.session_state.rom_config['inbound_feeds'] = st.number_input(
+            "Inbound Feeds",
+            value=st.session_state.rom_config['inbound_feeds'],
+            min_value=0,
+            step=1,
+            key="inbound_feeds_input"
+        )
+        st.session_state.rom_config['outbound_feeds'] = st.number_input(
+            "Outbound Feeds",
+            value=st.session_state.rom_config['outbound_feeds'],
+            min_value=0,
+            step=1,
+            key="outbound_feeds_input"
+        )
+        st.session_state.rom_config['de_hourly_rate'] = st.number_input(
+            "DE Hourly Rate ($)",
+            value=st.session_state.rom_config['de_hourly_rate'],
+            min_value=0,
+            step=5,
+            key="de_hourly_rate_input"
+        )
+
+    with col2:
+        st.session_state.rom_config['inbound_hours'] = st.number_input(
+            "Inbound Hours",
+            value=st.session_state.rom_config['inbound_hours'],
+            min_value=0,
+            step=1,
+            key="inbound_hours_input"
+        )
+        st.session_state.rom_config['outbound_hours'] = st.number_input(
+            "Outbound Hours",
+            value=st.session_state.rom_config['outbound_hours'],
+            min_value=0,
+            step=1,
+            key="outbound_hours_input"
+        )
+        st.session_state.rom_config['normalization_hours'] = st.number_input(
+            "Normalization Hours",
+            value=st.session_state.rom_config['normalization_hours'],
+            min_value=0.0,
+            step=0.1,
+            format="%.1f",
+            key="normalization_hours_input"
+        )
+
+    with col3:
+        st.session_state.rom_config['workspace_setup_cost'] = st.number_input(
+            "Workspace Setup Cost ($)",
+            value=st.session_state.rom_config['workspace_setup_cost'],
+            min_value=0,
+            step=1000,
+            key="workspace_setup_input"
+        )
+        st.session_state.rom_config['confluent_annual_cost'] = st.number_input(
+            "Confluent Annual Cost ($)",
+            value=st.session_state.rom_config['confluent_annual_cost'],
+            min_value=0,
+            step=100,
+            key="confluent_annual_input"
+        )
+        st.session_state.rom_config['gcp_per_feed_annual_cost'] = st.number_input(
+            "GCP Per Feed Annual Cost ($)",
+            value=st.session_state.rom_config['gcp_per_feed_annual_cost'],
+            min_value=0,
+            step=100,
+            key="gcp_per_feed_input"
+        )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.session_state.rom_config['escalation_rate'] = st.number_input(
+            "Escalation Rate",
+            value=st.session_state.rom_config['escalation_rate'],
+            min_value=0.0,
+            max_value=1.0,
+            step=0.001,
+            format="%.3f",
+            key="escalation_rate_input",
+            help="Annual cost increase rate (e.g., 0.034 = 3.4%)"
+        )
+    with col2:
+        st.session_state.rom_config['start_year'] = st.number_input(
+            "Start Year",
+            value=st.session_state.rom_config['start_year'],
+            min_value=2020,
+            max_value=2050,
+            step=1,
+            key="start_year_input"
+        )
+
+    st.divider()
+
+    # Reset button
+    if st.button("🔄 Reset ROM Settings to Defaults", use_container_width=True):
+        st.session_state.rom_config = DEFAULT_ROM_CONFIG.copy()
         st.rerun()
 
     st.divider()
@@ -530,13 +661,8 @@ with col2:
             )
 
         with col2:
-            rom_content = generate_rom_export(
-                selected_size=selected_size,
-                size_config=size_config,
-                cku_config=st.session_state.cku_config,
-                flat_costs=st.session_state.flat_costs
-            )
-            rom_filename = f"confluent-rom-{st.session_state.selected_env}-{datetime.now().strftime('%Y-%m-%d')}.csv"
+            rom_content = generate_rom_export(st.session_state.rom_config)
+            rom_filename = f"confluent-rom-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.csv"
             st.download_button(
                 label="📊 Download ROM CSV",
                 data=rom_content,
