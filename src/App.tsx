@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Calculator, Server, Database, Network, DollarSign, TrendingUp, Upload, Settings, Download, Shield } from 'lucide-react';
+import { Calculator, Server, Database, Network, DollarSign, TrendingUp, Upload, Settings, Download, Shield, FileSpreadsheet } from 'lucide-react';
 import { parseCSV, ParsedData } from './utils/csvParser';
 import { generateCostProjectionCSV, downloadCSV, generateExportFilename } from './utils/exportData';
+import { generateROMExport, ROMConfig } from './utils/romExport';
 import topicListCSV from './assets/Topic_list.csv?raw';
 
 interface TShirtSize {
@@ -45,6 +46,20 @@ const DEFAULT_FLAT_COSTS: FlatCosts = {
   governance: 42840,
 };
 
+const DEFAULT_ROM_CONFIG: ROMConfig = {
+  inboundFeeds: 1,
+  outboundFeeds: 1,
+  deHourlyRate: 80,
+  inboundHours: 296,
+  outboundHours: 254,
+  normalizationHours: 27.9,
+  workspaceSetupCost: 8000,
+  confluentAnnualCost: 11709,
+  gcpPerFeedAnnualCost: 9279,
+  escalationRate: 0.034,
+  startYear: new Date().getFullYear(),
+};
+
 function App() {
   const [selectedSize, setSelectedSize] = useState<string>('Medium');
   const [parsedData, setParsedData] = useState<ParsedData | null>(null);
@@ -53,6 +68,9 @@ function App() {
   const [flatCosts, setFlatCosts] = useState<FlatCosts>(DEFAULT_FLAT_COSTS);
   const [showSettings, setShowSettings] = useState(false);
   const [showCostSettings, setShowCostSettings] = useState(false);
+  const [showROMSettings, setShowROMSettings] = useState(false);
+  const [romConfig, setRomConfig] = useState<ROMConfig>(DEFAULT_ROM_CONFIG);
+  const [editingROM, setEditingROM] = useState<ROMConfig>(DEFAULT_ROM_CONFIG);
   const [editingSizes, setEditingSizes] = useState<Record<string, TShirtSize>>(DEFAULT_TSHIRT_SIZES);
   const [editingCKU, setEditingCKU] = useState<CKUConfig>(DEFAULT_CKU_CONFIG);
   const [editingFlatCosts, setEditingFlatCosts] = useState<FlatCosts>(DEFAULT_FLAT_COSTS);
@@ -97,6 +115,22 @@ function App() {
     setEditingFlatCosts(DEFAULT_FLAT_COSTS);
     setCkuConfig(DEFAULT_CKU_CONFIG);
     setFlatCosts(DEFAULT_FLAT_COSTS);
+  };
+
+  const handleSaveROMSettings = () => {
+    setRomConfig(editingROM);
+    setShowROMSettings(false);
+  };
+
+  const handleResetROMSettings = () => {
+    setEditingROM(DEFAULT_ROM_CONFIG);
+    setRomConfig(DEFAULT_ROM_CONFIG);
+  };
+
+  const handleExportROM = () => {
+    const csvContent = generateROMExport(romConfig);
+    const filename = `confluent-rom-${romConfig.startYear}-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCSV(csvContent, filename);
   };
 
   if (!parsedData) {
@@ -185,6 +219,13 @@ function App() {
                 <Download className="w-5 h-5" />
                 <span>Export 7-Year</span>
               </button>
+              <button
+                onClick={handleExportROM}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              >
+                <FileSpreadsheet className="w-5 h-5" />
+                <span>Export ROM</span>
+              </button>
               <label className="cursor-pointer">
                 <input
                   type="file"
@@ -210,6 +251,13 @@ function App() {
               >
                 <DollarSign className="w-5 h-5" />
                 <span>Costs</span>
+              </button>
+              <button
+                onClick={() => setShowROMSettings(!showROMSettings)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                <FileSpreadsheet className="w-5 h-5" />
+                <span>ROM</span>
               </button>
             </div>
           </div>
@@ -474,6 +522,177 @@ function App() {
                     onChange={(e) => setEditingFlatCosts({ ...editingFlatCosts, governance: parseInt(e.target.value) || 0 })}
                     className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                   />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showROMSettings && (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-white">ROM Configuration</h3>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleResetROMSettings}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                >
+                  Reset to Defaults
+                </button>
+                <button
+                  onClick={handleSaveROMSettings}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-slate-900 p-4 rounded-lg">
+                <h4 className="text-white font-semibold mb-4">Feed Configuration</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Inbound Feeds</label>
+                    <input
+                      type="number"
+                      value={editingROM.inboundFeeds}
+                      onChange={(e) => setEditingROM({ ...editingROM, inboundFeeds: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Outbound Feeds</label>
+                    <input
+                      type="number"
+                      value={editingROM.outboundFeeds}
+                      onChange={(e) => setEditingROM({ ...editingROM, outboundFeeds: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="pt-2 border-t border-slate-700">
+                    <div className="text-slate-400 text-sm">Total Feeds</div>
+                    <div className="text-xl font-bold text-white">
+                      {editingROM.inboundFeeds + editingROM.outboundFeeds}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 p-4 rounded-lg">
+                <h4 className="text-white font-semibold mb-4">Data Engineering</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Hourly Rate ($)</label>
+                    <input
+                      type="number"
+                      value={editingROM.deHourlyRate}
+                      onChange={(e) => setEditingROM({ ...editingROM, deHourlyRate: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Inbound Hours (per feed)</label>
+                    <input
+                      type="number"
+                      value={editingROM.inboundHours}
+                      onChange={(e) => setEditingROM({ ...editingROM, inboundHours: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Outbound Hours (per feed)</label>
+                    <input
+                      type="number"
+                      value={editingROM.outboundHours}
+                      onChange={(e) => setEditingROM({ ...editingROM, outboundHours: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Normalization Hours (total)</label>
+                    <input
+                      type="number"
+                      value={editingROM.normalizationHours}
+                      onChange={(e) => setEditingROM({ ...editingROM, normalizationHours: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 p-4 rounded-lg">
+                <h4 className="text-white font-semibold mb-4">Cloud Infrastructure</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Workspace Setup ($)</label>
+                    <input
+                      type="number"
+                      value={editingROM.workspaceSetupCost}
+                      onChange={(e) => setEditingROM({ ...editingROM, workspaceSetupCost: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Confluent Annual Cost ($)</label>
+                    <input
+                      type="number"
+                      value={editingROM.confluentAnnualCost}
+                      onChange={(e) => setEditingROM({ ...editingROM, confluentAnnualCost: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">GCP/GKE Per Feed Annual ($)</label>
+                    <input
+                      type="number"
+                      value={editingROM.gcpPerFeedAnnualCost}
+                      onChange={(e) => setEditingROM({ ...editingROM, gcpPerFeedAnnualCost: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Escalation Rate (%)</label>
+                    <input
+                      type="number"
+                      value={(editingROM.escalationRate * 100).toFixed(1)}
+                      onChange={(e) => setEditingROM({ ...editingROM, escalationRate: parseFloat(e.target.value) / 100 || 0 })}
+                      step="0.1"
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Start Year</label>
+                    <input
+                      type="number"
+                      value={editingROM.startYear}
+                      onChange={(e) => setEditingROM({ ...editingROM, startYear: parseInt(e.target.value) || new Date().getFullYear() })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-blue-300 text-sm">Total DE Cost</div>
+                  <div className="text-2xl font-bold text-white">
+                    ${Math.round((editingROM.inboundFeeds * editingROM.inboundHours + editingROM.outboundFeeds * editingROM.outboundHours + editingROM.normalizationHours) * editingROM.deHourlyRate + editingROM.workspaceSetupCost).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-blue-300 text-sm">First Year Cloud Cost</div>
+                  <div className="text-2xl font-bold text-white">
+                    ${Math.round(editingROM.confluentAnnualCost + (editingROM.inboundFeeds + editingROM.outboundFeeds) * editingROM.gcpPerFeedAnnualCost).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-blue-300 text-sm">Initial Investment</div>
+                  <div className="text-2xl font-bold text-white">
+                    ${Math.round((editingROM.inboundFeeds * editingROM.inboundHours + editingROM.outboundFeeds * editingROM.outboundHours + editingROM.normalizationHours) * editingROM.deHourlyRate + editingROM.workspaceSetupCost + editingROM.confluentAnnualCost + (editingROM.inboundFeeds + editingROM.outboundFeeds) * editingROM.gcpPerFeedAnnualCost).toLocaleString()}
+                  </div>
                 </div>
               </div>
             </div>
