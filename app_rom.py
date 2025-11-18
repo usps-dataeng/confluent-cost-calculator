@@ -642,20 +642,6 @@ st.divider()
 col1, col2 = st.columns([3, 1])
 with col2:
     if st.button("📥 Export Reports", use_container_width=True, type="primary"):
-        # Try to find logo in common locations
-        import os
-        logo_paths = [
-            'public/Postal Logo.png',
-            'Postal Logo.png',
-            '../public/Postal Logo.png',
-            os.path.join(os.path.dirname(__file__), 'public', 'Postal Logo.png')
-        ]
-        logo_path = None
-        for path in logo_paths:
-            if os.path.exists(path):
-                logo_path = path
-                break
-
         excel_content = generate_cost_projection_excel(
             selected_size=selected_size,
             partitions=size_config['partitions'],
@@ -663,8 +649,7 @@ with col2:
             cku_config=st.session_state.cku_config,
             flat_costs=st.session_state.flat_costs,
             costs=costs,
-            annual_increase_rate=annual_increase_rate / 100,
-            logo_path=logo_path
+            annual_increase_rate=annual_increase_rate / 100
         )
 
         excel_filename = f"confluent-cost-projection-{st.session_state.selected_env}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
@@ -680,7 +665,7 @@ with col2:
             )
 
         with col2:
-            rom_excel_content = generate_rom_export_excel(st.session_state.rom_config, logo_path=logo_path)
+            rom_excel_content = generate_rom_export_excel(st.session_state.rom_config)
             rom_excel_filename = f"confluent-rom-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
             st.download_button(
                 label="📊 Download ROM Excel",

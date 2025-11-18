@@ -173,8 +173,8 @@ def generate_rom_export(config):
     return '\n'.join(lines)
 
 
-def generate_rom_export_excel(config, logo_path='public/Postal Logo.png'):
-    """Generate formatted Excel file with USPS logo"""
+def generate_rom_export_excel(config, logo_path=None):
+    """Generate formatted Excel file without external dependencies"""
     if not HAS_OPENPYXL:
         return generate_rom_export(config).encode('utf-8')
 
@@ -193,26 +193,14 @@ def generate_rom_export_excel(config, logo_path='public/Postal Logo.png'):
     header_font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
     title_font = Font(name='Calibri', size=16, bold=True, color=usps_blue)
     bold_font = Font(name='Calibri', size=11, bold=True)
+    normal_font = Font(name='Calibri', size=11)
 
     thin_border = Border(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
     )
 
-    # Add USPS logo
-    try:
-        if logo_path and logo_path is not None:
-            img = Image(logo_path)
-            img.width = 200
-            img.height = 60
-            ws.add_image(img, 'A1')
-            start_row = 5
-        else:
-            start_row = 1
-    except:
-        start_row = 1
-
-    row = start_row
+    row = 1
 
     # Title
     ws.merge_cells(f'A{row}:N{row}')
@@ -325,8 +313,102 @@ def generate_rom_export_excel(config, logo_path='public/Postal Logo.png'):
             ws.cell(row, 2).fill = light_blue
         row += 1
 
+    row += 1
+
+    # Escalation Rate
+    ws.cell(row, 1, 'Escalation Rate:').font = bold_font
+    ws.cell(row, 2, f"{config['escalation_rate'] * 100:.1f}%")
+    row += 2
+
+    # Notes
+    ws[f'A{row}'] = 'Note*'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+    ws.cell(row, 1, 'Estimate based on latest Payroll 2.0 scaling factors').font = normal_font
+    row += 1
+    ws.cell(row, 1, 'ROM may require revision as detailed requirements are finalized').font = normal_font
+    row += 2
+
+    # Assumptions
+    ws[f'A{row}'] = 'Assumptions:'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    assumptions = [
+        f"ROM covers {results['total_feeds']} EEB ingest feed(s) with inbound/outbound data processing capabilities",
+        "Feed ingests data with complex processing requirements",
+        "Includes event data with facility impacts and workflow approvals",
+        "Feed includes data normalization and standardization requirements",
+        "Workspace/Environment setup costs included",
+        f"Confluent platform required for real-time streaming: {format_in_thousands(config['confluent_annual_cost'])} per feed per year",
+        f"GCP/GKE infrastructure cost: {format_in_thousands(config['gcp_per_feed_annual_cost'])} per feed per year for compute and storage",
+        "ROM based on current understanding of high level requirements & known attributes",
+        "As requirements are refined/finalized the ROM may need to be revised"
+    ]
+
+    for i, assumption in enumerate(assumptions, start=1):
+        ws.cell(row, 1, f"{i}. {assumption}").font = normal_font
+        row += 1
+
+    row += 1
+
+    # Timeline
+    ws[f'A{row}'] = 'Timeline'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    ws.cell(row, 1, f"FY{config['start_year']}-FY{config['start_year'] + 6}").font = bold_font
+    row += 1
+
+    initial_total = results['initial_investment'][0]['total']
+    ws.cell(row, 1, f"FY{config['start_year']}: {format_in_thousands(initial_total)} (Data Engineering + Cloud infrastructure setup - starting in 3 weeks)").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"FY{config['start_year'] + 1}-{config['start_year'] + 6}: {format_in_thousands(results['breakdown']['operating_variance_6year'] / 6)} annually (ongoing cloud operations with {config['escalation_rate'] * 100:.1f}% escalation) plus Operating Variance").font = normal_font
+    row += 2
+
+    # Cost Breakdown per Feed
+    ws[f'A{row}'] = 'Cost Breakdown per Feed:'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    cost_breakdown = [
+        (f"Create inbound ingest: {format_in_thousands(config['inbound_hours'] * config['de_hourly_rate'])} ({round(config['inbound_hours'])} hours)"),
+        (f"Create outbound enterprise data assets: {format_in_thousands(config['outbound_hours'] * config['de_hourly_rate'])} ({round(config['outbound_hours'])} hours)"),
+        (f"Data normalization and standardization: {format_in_thousands(results['breakdown']['normalization_cost'])} ({config['normalization_hours']} hours - {results['total_feeds']} feeds)"),
+        (f"Workspace/Environment/Subscription Prep: {format_in_thousands(config['workspace_setup_cost'])}"),
+        (f"Annual Confluent platform cost: {format_in_thousands(config['confluent_annual_cost'])}"),
+        (f"Annual GCP/GKE cost: {format_in_thousands(config['gcp_per_feed_annual_cost'])} per feed")
+    ]
+
+    for item in cost_breakdown:
+        ws.cell(row, 1, item).font = normal_font
+        row += 1
+
+    row += 1
+
+    # Total Feed Investment
+    ws[f'A{row}'] = f'Total {results["total_feeds"]}-Feed Investment'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    investment_items = [
+        (f"Data Engineering: {format_in_thousands(results['breakdown']['one_time_development'])} (one-time development)"),
+        (f"Cloud Infrastructure: {format_in_thousands(results['breakdown']['cloud_infrastructure_7year'])} (7-year operational costs with {config['escalation_rate'] * 100:.1f}% escalation)"),
+        (f"Operating Variance: {format_in_thousands(results['breakdown']['operating_variance_6year'])} (6-year escalated costs)"),
+        (f"Total Project Cost: {format_in_thousands(results['breakdown']['total_project_cost'])}")
+    ]
+
+    for item in investment_items:
+        ws.cell(row, 1, item).font = normal_font
+        row += 1
+
     # Column widths
-    ws.column_dimensions['A'].width = 35
+    ws.column_dimensions['A'].width = 100
     for col in range(2, 15):
         ws.column_dimensions[get_column_letter(col)].width = 12
 

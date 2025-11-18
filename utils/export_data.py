@@ -98,9 +98,9 @@ def generate_cost_projection_excel(
     flat_costs,
     costs,
     annual_increase_rate=0.034,
-    logo_path='public/Postal Logo.png'
+    logo_path=None
 ):
-    """Generate formatted Excel file with USPS logo"""
+    """Generate formatted Excel file without external dependencies"""
     if not HAS_OPENPYXL:
         # Fallback to CSV if openpyxl not available
         return generate_cost_projection_csv(
@@ -128,21 +128,8 @@ def generate_cost_projection_excel(
         top=Side(style='thin'), bottom=Side(style='thin')
     )
 
-    # Add USPS logo if available
-    try:
-        if logo_path and logo_path is not None:
-            img = Image(logo_path)
-            img.width = 200
-            img.height = 60
-            ws.add_image(img, 'A1')
-            start_row = 5
-        else:
-            start_row = 1
-    except:
-        start_row = 1
-
     current_year = datetime.now().year
-    row = start_row
+    row = 1
 
     # Title
     ws.merge_cells(f'A{row}:G{row}')
