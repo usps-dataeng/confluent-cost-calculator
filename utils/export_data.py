@@ -130,11 +130,14 @@ def generate_cost_projection_excel(
 
     # Add USPS logo if available
     try:
-        img = Image(logo_path)
-        img.width = 200
-        img.height = 60
-        ws.add_image(img, 'A1')
-        start_row = 5
+        if logo_path and logo_path is not None:
+            img = Image(logo_path)
+            img.width = 200
+            img.height = 60
+            ws.add_image(img, 'A1')
+            start_row = 5
+        else:
+            start_row = 1
     except:
         start_row = 1
 
