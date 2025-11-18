@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from utils.csv_parser import parse_csv_file, parse_databricks_table
-from utils.export_data import generate_cost_projection_csv
-from utils.rom_export import generate_rom_export
+from utils.export_data import generate_cost_projection_csv, generate_cost_projection_excel
+from utils.rom_export import generate_rom_export, generate_rom_export_excel
 
 # Default T-shirt sizes
 DEFAULT_TSHIRT_SIZES = {
@@ -641,8 +641,8 @@ with col2:
 st.divider()
 col1, col2 = st.columns([3, 1])
 with col2:
-    if st.button("📥 Export 7-Year Projection", use_container_width=True, type="primary"):
-        csv_content = generate_cost_projection_csv(
+    if st.button("📥 Export Reports", use_container_width=True, type="primary"):
+        excel_content = generate_cost_projection_excel(
             selected_size=selected_size,
             partitions=size_config['partitions'],
             storage_gb=size_config['storage_gb'],
@@ -652,26 +652,26 @@ with col2:
             annual_increase_rate=annual_increase_rate / 100
         )
 
-        filename = f"confluent-cost-projection-{st.session_state.selected_env}-{datetime.now().strftime('%Y-%m-%d')}.csv"
+        excel_filename = f"confluent-cost-projection-{st.session_state.selected_env}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         col1, col2 = st.columns(2)
         with col1:
             st.download_button(
-                label="💾 Download Cost Projection CSV",
-                data=csv_content,
-                file_name=filename,
-                mime="text/csv",
+                label="💾 Download Cost Projection Excel",
+                data=excel_content,
+                file_name=excel_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
 
         with col2:
-            rom_content = generate_rom_export(st.session_state.rom_config)
-            rom_filename = f"confluent-rom-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.csv"
+            rom_excel_content = generate_rom_export_excel(st.session_state.rom_config)
+            rom_excel_filename = f"confluent-rom-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
             st.download_button(
-                label="📊 Download ROM CSV",
-                data=rom_content,
-                file_name=rom_filename,
-                mime="text/csv",
+                label="📊 Download ROM Excel",
+                data=rom_excel_content,
+                file_name=rom_excel_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
 

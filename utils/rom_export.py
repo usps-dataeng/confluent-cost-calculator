@@ -1,3 +1,14 @@
+import io
+
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.drawing.image import Image
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+
 def format_in_thousands(value):
     return f"${value:,.0f}"
 
@@ -60,6 +71,7 @@ def calculate_rom_costs(config):
     }
 
 def generate_rom_export(config):
+    """Generate CSV format for backward compatibility"""
     results = calculate_rom_costs(config)
     lines = []
 
@@ -159,3 +171,164 @@ def generate_rom_export(config):
     lines.append(f"24,Total Project Cost: {format_in_thousands(results['breakdown']['total_project_cost'])},{round(results['breakdown']['total_project_cost'] / 1000)}")
 
     return '\n'.join(lines)
+
+
+def generate_rom_export_excel(config, logo_path='public/Postal Logo.png'):
+    """Generate formatted Excel file with USPS logo"""
+    if not HAS_OPENPYXL:
+        return generate_rom_export(config).encode('utf-8')
+
+    results = calculate_rom_costs(config)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "ROM Projection"
+
+    # Color scheme - USPS Blue
+    usps_blue = "004B87"
+    header_fill = PatternFill(start_color=usps_blue, end_color=usps_blue, fill_type="solid")
+    light_blue = PatternFill(start_color="D9E9F7", end_color="D9E9F7", fill_type="solid")
+    light_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+    yellow_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+    header_font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
+    title_font = Font(name='Calibri', size=16, bold=True, color=usps_blue)
+    bold_font = Font(name='Calibri', size=11, bold=True)
+
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    # Add USPS logo
+    try:
+        img = Image(logo_path)
+        img.width = 200
+        img.height = 60
+        ws.add_image(img, 'A1')
+        start_row = 5
+    except:
+        start_row = 1
+
+    row = start_row
+
+    # Title
+    ws.merge_cells(f'A{row}:N{row}')
+    title_cell = ws[f'A{row}']
+    title_cell.value = 'Confluent Feed ROM - Rough Order of Magnitude'
+    title_cell.font = title_font
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    row += 2
+
+    # Year headers
+    years = [config['start_year'] + i for i in range(12)]
+    ws[f'A{row}'] = 'Fiscal Year'
+    ws[f'A{row}'].font = header_font
+    ws[f'A{row}'].fill = header_fill
+    ws[f'A{row}'].border = thin_border
+
+    for idx, year in enumerate(years, start=2):
+        cell = ws.cell(row, idx, year)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    ws.cell(row, 14, 'Total').font = header_font
+    ws.cell(row, 14).fill = header_fill
+    ws.cell(row, 14).alignment = Alignment(horizontal='center')
+    ws.cell(row, 14).border = thin_border
+    row += 1
+
+    # INITIAL INVESTMENT EXPENSE
+    ws[f'A{row}'] = 'INITIAL INVESTMENT EXPENSE'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = yellow_fill
+    row += 1
+
+    # Data Engineering
+    initial_de = results['initial_investment'][0]['data_engineering']
+    ws.cell(row, 1, 'Data Engineering').border = thin_border
+    ws.cell(row, 2, initial_de).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 14, initial_de).number_format = '$#,##0'
+    ws.cell(row, 14).border = thin_border
+    row += 1
+
+    # Empty categories
+    empty_cats = ['Data Strategy and Governance', 'Enterprise Reporting and Dashboard',
+                  'Advance Modeling', 'Service Performance']
+    for cat in empty_cats:
+        ws.cell(row, 1, cat).border = thin_border
+        ws.cell(row, 14, 0).number_format = '$#,##0'
+        ws.cell(row, 14).border = thin_border
+        row += 1
+
+    # GCP/GKE/Confluent
+    initial_cloud = results['initial_investment'][0]['cloud_infrastructure']
+    ws.cell(row, 1, 'GCP/GKE/Confluent').border = thin_border
+    ws.cell(row, 2, initial_cloud).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+
+    for idx, ov in enumerate(results['operating_variance'], start=3):
+        ws.cell(row, idx, ov['cloud_infrastructure']).number_format = '$#,##0'
+        ws.cell(row, idx).border = thin_border
+
+    ws.cell(row, 14, results['breakdown']['cloud_infrastructure_7year']).number_format = '$#,##0'
+    ws.cell(row, 14).border = thin_border
+    ws.cell(row, 1).fill = light_blue
+    row += 1
+
+    # TOTAL
+    initial_total = results['initial_investment'][0]['total']
+    ws.cell(row, 1, 'TOTAL').font = bold_font
+    ws.cell(row, 1).border = thin_border
+    ws.cell(row, 1).fill = header_fill
+    ws.cell(row, 1).font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
+    ws.cell(row, 2, initial_total).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 2).font = bold_font
+
+    for idx, ov in enumerate(results['operating_variance'], start=3):
+        ws.cell(row, idx, ov['cloud_infrastructure']).number_format = '$#,##0'
+        ws.cell(row, idx).border = thin_border
+        ws.cell(row, idx).font = bold_font
+
+    ws.cell(row, 14, results['breakdown']['total_project_cost']).number_format = '$#,##0'
+    ws.cell(row, 14).border = thin_border
+    ws.cell(row, 14).font = bold_font
+    row += 2
+
+    # Summary section
+    ws[f'A{row}'] = 'Summary'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    summary_data = [
+        ('Capital', 0),
+        ('Expense', results['breakdown']['total_project_cost']),
+        ('Variance', results['breakdown']['operating_variance_6year']),
+        ('Total', results['breakdown']['total_project_cost'])
+    ]
+
+    for label, value in summary_data:
+        ws.cell(row, 1, label).border = thin_border
+        ws.cell(row, 1).font = bold_font if label == 'Total' else None
+        ws.cell(row, 2, value).number_format = '$#,##0'
+        ws.cell(row, 2).border = thin_border
+        ws.cell(row, 2).font = bold_font if label == 'Total' else None
+        if label == 'Total':
+            ws.cell(row, 1).fill = light_blue
+            ws.cell(row, 2).fill = light_blue
+        row += 1
+
+    # Column widths
+    ws.column_dimensions['A'].width = 35
+    for col in range(2, 15):
+        ws.column_dimensions[get_column_letter(col)].width = 12
+
+    # Save to bytes
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
