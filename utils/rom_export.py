@@ -13,17 +13,31 @@ def format_in_thousands(value):
     return f"${value:,.0f}"
 
 def calculate_rom_costs(config):
-    total_feeds = config['inbound_feeds'] + config['outbound_feeds']
+    # Calculate based on new feed_configs structure
+    num_ingests = config.get('num_ingests', 1)
+    feed_configs = config.get('feed_configs', [{'inbound': 1, 'outbound': 1, 'partitions': 0.048}])
 
-    inbound_cost = config['inbound_feeds'] * config['inbound_hours'] * config['de_hourly_rate']
-    outbound_cost = config['outbound_feeds'] * config['outbound_hours'] * config['de_hourly_rate']
-    normalization_cost = config['normalization_hours'] * config['de_hourly_rate']
+    # Calculate total feeds and partitions from feed_configs
+    total_inbound_feeds = sum(f['inbound'] for f in feed_configs)
+    total_outbound_feeds = sum(f['outbound'] for f in feed_configs)
+    total_feeds = num_ingests  # Number of separate ingests
+    total_partitions = sum(f['partitions'] for f in feed_configs)
+
+    # Calculate engineering costs
+    inbound_cost = total_inbound_feeds * config['inbound_hours'] * config['de_hourly_rate']
+    outbound_cost = total_outbound_feeds * config['outbound_hours'] * config['de_hourly_rate']
+    normalization_cost = config['normalization_hours'] * config['de_hourly_rate'] * total_feeds
     workspace_setup = config['workspace_setup_cost']
 
     one_time_development = inbound_cost + outbound_cost + normalization_cost + workspace_setup
 
-    confluent_cost = config['confluent_annual_cost']
-    gcp_cost = total_feeds * config['gcp_per_feed_annual_cost']
+    # Cloud costs - calculate per feed based on num_ingests
+    confluent_cost_per_feed = config['confluent_annual_cost']
+    gcp_cost_per_feed = config['gcp_per_feed_annual_cost']
+
+    # Total cloud cost for all feeds
+    confluent_cost = confluent_cost_per_feed * total_feeds
+    gcp_cost = gcp_cost_per_feed * total_feeds
     first_year_cloud_cost = confluent_cost + gcp_cost
 
     initial_investment = [{
@@ -56,6 +70,10 @@ def calculate_rom_costs(config):
         'initial_investment': initial_investment,
         'operating_variance': operating_variance,
         'total_feeds': total_feeds,
+        'total_partitions': total_partitions,
+        'total_inbound_feeds': total_inbound_feeds,
+        'total_outbound_feeds': total_outbound_feeds,
+        'feed_configs': feed_configs,
         'breakdown': {
             'inbound_cost': inbound_cost,
             'outbound_cost': outbound_cost,
@@ -209,6 +227,31 @@ def generate_rom_export_excel(config, logo_path=None):
     title_cell.font = title_font
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
     row += 2
+
+    # Feed Configuration Summary
+    ws[f'A{row}'] = 'Feed Configuration Summary'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    ws.cell(row, 1, f"Number of Ingests: {results['total_feeds']}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Total Partitions: {results['total_partitions']:.3f}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Records per Day: {config.get('records_per_day', 'N/A'):,}").font = normal_font
+    row += 1
+
+    # Feed Patterns
+    ws[f'A{row}'] = 'Feed Patterns:'
+    ws[f'A{row}'].font = bold_font
+    row += 1
+
+    for i, feed in enumerate(results['feed_configs'], start=1):
+        pattern_text = f"  Feed {i}: {feed['inbound']} inbound → {feed['outbound']} outbound ({feed['partitions']:.3f} partitions)"
+        ws.cell(row, 1, pattern_text).font = normal_font
+        row += 1
+
+    row += 1
 
     # Year headers
     years = [config['start_year'] + i for i in range(12)]

@@ -51,7 +51,12 @@ DEFAULT_ROM_CONFIG = {
     'confluent_annual_cost': 11709,
     'gcp_per_feed_annual_cost': 9279,
     'escalation_rate': 0.034,
-    'start_year': datetime.now().year
+    'start_year': datetime.now().year,
+    'records_per_day': 5000,  # Daily volume
+    'num_ingests': 1,  # Number of separate ingests
+    'feed_configs': [  # Configuration for each feed
+        {'inbound': 1, 'outbound': 1, 'partitions': 0.048}  # Default: 1->1 with low partitions
+    ]
 }
 
 # Page configuration
@@ -340,23 +345,32 @@ if st.session_state.show_rom_settings:
 
     st.info("⚙️ Edit these settings to match your ROM requirements.")
 
-    col1, col2, col3 = st.columns(3)
+    # Volume and Ingests Configuration
+    st.markdown("### 📊 Project Basics")
+    vol_col1, vol_col2, vol_col3 = st.columns(3)
 
-    with col1:
-        st.session_state.rom_config['inbound_feeds'] = st.number_input(
-            "Inbound Feeds",
-            value=st.session_state.rom_config['inbound_feeds'],
+    with vol_col1:
+        st.session_state.rom_config['records_per_day'] = st.number_input(
+            "Records per Day",
+            value=st.session_state.rom_config.get('records_per_day', 5000),
             min_value=0,
-            step=1,
-            key="inbound_feeds_input"
+            step=1000,
+            key="records_per_day_input",
+            help="Daily volume of records being processed"
         )
-        st.session_state.rom_config['outbound_feeds'] = st.number_input(
-            "Outbound Feeds",
-            value=st.session_state.rom_config['outbound_feeds'],
-            min_value=0,
+
+    with vol_col2:
+        st.session_state.rom_config['num_ingests'] = st.number_input(
+            "Number of Ingests",
+            value=st.session_state.rom_config.get('num_ingests', 1),
+            min_value=1,
+            max_value=10,
             step=1,
-            key="outbound_feeds_input"
+            key="num_ingests_input",
+            help="How many separate ingest feeds/patterns"
         )
+
+    with vol_col3:
         st.session_state.rom_config['de_hourly_rate'] = st.number_input(
             "DE Hourly Rate ($)",
             value=st.session_state.rom_config['de_hourly_rate'],
@@ -365,7 +379,62 @@ if st.session_state.show_rom_settings:
             key="de_hourly_rate_input"
         )
 
-    with col2:
+    # Initialize feed_configs if not present
+    if 'feed_configs' not in st.session_state.rom_config or len(st.session_state.rom_config['feed_configs']) != st.session_state.rom_config['num_ingests']:
+        st.session_state.rom_config['feed_configs'] = [
+            {'inbound': 1, 'outbound': 1, 'partitions': 0.048}
+            for _ in range(st.session_state.rom_config['num_ingests'])
+        ]
+
+    # Feed Pattern Configuration
+    st.markdown("### 🔄 Feed Patterns")
+    st.caption("Configure each ingest pattern (e.g., Feed 1: 3 inbound → 1 outbound)")
+
+    for i in range(st.session_state.rom_config['num_ingests']):
+        with st.expander(f"📝 Feed {i+1} Configuration", expanded=(i==0)):
+            feed_col1, feed_col2, feed_col3 = st.columns(3)
+
+            with feed_col1:
+                inbound = st.number_input(
+                    f"Inbound Topics",
+                    value=st.session_state.rom_config['feed_configs'][i]['inbound'],
+                    min_value=1,
+                    step=1,
+                    key=f"feed_{i}_inbound"
+                )
+                st.session_state.rom_config['feed_configs'][i]['inbound'] = inbound
+
+            with feed_col2:
+                outbound = st.number_input(
+                    f"Outbound Topics",
+                    value=st.session_state.rom_config['feed_configs'][i]['outbound'],
+                    min_value=1,
+                    step=1,
+                    key=f"feed_{i}_outbound"
+                )
+                st.session_state.rom_config['feed_configs'][i]['outbound'] = outbound
+
+            with feed_col3:
+                partitions = st.number_input(
+                    f"Partitions (GB)",
+                    value=st.session_state.rom_config['feed_configs'][i]['partitions'],
+                    min_value=0.001,
+                    step=0.1,
+                    format="%.3f",
+                    key=f"feed_{i}_partitions",
+                    help="Partition size from reference table"
+                )
+                st.session_state.rom_config['feed_configs'][i]['partitions'] = partitions
+
+            st.info(f"🔹 **Feed {i+1}:** {inbound} inbound → {outbound} outbound | {partitions} partitions")
+
+    st.divider()
+
+    # Engineering Hours Configuration
+    st.markdown("### 👨‍💻 Engineering Hours")
+    eng_col1, eng_col2, eng_col3 = st.columns(3)
+
+    with eng_col1:
         st.session_state.rom_config['inbound_hours'] = st.number_input(
             "Inbound Hours",
             value=st.session_state.rom_config['inbound_hours'],
@@ -373,6 +442,8 @@ if st.session_state.show_rom_settings:
             step=1,
             key="inbound_hours_input"
         )
+
+    with eng_col2:
         st.session_state.rom_config['outbound_hours'] = st.number_input(
             "Outbound Hours",
             value=st.session_state.rom_config['outbound_hours'],
@@ -380,6 +451,8 @@ if st.session_state.show_rom_settings:
             step=1,
             key="outbound_hours_input"
         )
+
+    with eng_col3:
         st.session_state.rom_config['normalization_hours'] = st.number_input(
             "Normalization Hours",
             value=st.session_state.rom_config['normalization_hours'],
@@ -389,7 +462,13 @@ if st.session_state.show_rom_settings:
             key="normalization_hours_input"
         )
 
-    with col3:
+    st.divider()
+
+    # Cloud Costs Configuration
+    st.markdown("### ☁️ Cloud Costs")
+    cloud_col1, cloud_col2, cloud_col3 = st.columns(3)
+
+    with cloud_col1:
         st.session_state.rom_config['workspace_setup_cost'] = st.number_input(
             "Workspace Setup Cost ($)",
             value=st.session_state.rom_config['workspace_setup_cost'],
@@ -397,19 +476,25 @@ if st.session_state.show_rom_settings:
             step=1000,
             key="workspace_setup_input"
         )
+
+    with cloud_col2:
         st.session_state.rom_config['confluent_annual_cost'] = st.number_input(
             "Confluent Annual Cost ($)",
             value=st.session_state.rom_config['confluent_annual_cost'],
             min_value=0,
             step=100,
-            key="confluent_annual_input"
+            key="confluent_annual_input",
+            help="Annual Confluent cost per feed"
         )
+
+    with cloud_col3:
         st.session_state.rom_config['gcp_per_feed_annual_cost'] = st.number_input(
             "GCP Per Feed Annual Cost ($)",
             value=st.session_state.rom_config['gcp_per_feed_annual_cost'],
             min_value=0,
             step=100,
-            key="gcp_per_feed_input"
+            key="gcp_per_feed_input",
+            help="Annual GCP cost per feed"
         )
 
     col1, col2 = st.columns(2)
