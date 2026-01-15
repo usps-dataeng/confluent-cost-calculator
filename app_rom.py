@@ -58,9 +58,9 @@ DEFAULT_ROM_CONFIG = {
     'escalation_rate': 0.034,
     'start_year': datetime.now().year,
     'records_per_day': 5000,  # Daily volume
-    'num_ingests': 1,  # Number of separate ingests
+    'num_ingests': 12,  # Number of separate ingests
     'feed_configs': [  # Configuration for each feed
-        {'inbound': 1, 'outbound': 1, 'partitions': 0.048}  # Default: 1->1 with low partitions
+        {'inbound': 1, 'outbound': 1, 'partitions': 0.048} for _ in range(12)  # 12 ingests: 1->1 each
     ]
 }
 
@@ -369,7 +369,7 @@ if st.session_state.show_rom_settings:
             "Number of Ingests",
             value=st.session_state.rom_config.get('num_ingests', 1),
             min_value=1,
-            max_value=10,
+            max_value=15,
             step=1,
             key="num_ingests_input",
             help="How many separate ingest feeds/patterns"
@@ -390,48 +390,6 @@ if st.session_state.show_rom_settings:
             {'inbound': 1, 'outbound': 1, 'partitions': 0.048}
             for _ in range(st.session_state.rom_config['num_ingests'])
         ]
-
-    # Feed Pattern Configuration
-    st.markdown("### 🔄 Feed Patterns")
-    st.caption("Configure each ingest pattern (e.g., Feed 1: 3 inbound → 1 outbound)")
-
-    for i in range(st.session_state.rom_config['num_ingests']):
-        with st.expander(f"📝 Feed {i+1} Configuration", expanded=(i==0)):
-            feed_col1, feed_col2, feed_col3 = st.columns(3)
-
-            with feed_col1:
-                inbound = st.number_input(
-                    f"Inbound Topics",
-                    value=st.session_state.rom_config['feed_configs'][i]['inbound'],
-                    min_value=1,
-                    step=1,
-                    key=f"feed_{i}_inbound"
-                )
-                st.session_state.rom_config['feed_configs'][i]['inbound'] = inbound
-
-            with feed_col2:
-                outbound = st.number_input(
-                    f"Outbound Topics",
-                    value=st.session_state.rom_config['feed_configs'][i]['outbound'],
-                    min_value=1,
-                    step=1,
-                    key=f"feed_{i}_outbound"
-                )
-                st.session_state.rom_config['feed_configs'][i]['outbound'] = outbound
-
-            with feed_col3:
-                partitions = st.number_input(
-                    f"Partitions (GB)",
-                    value=st.session_state.rom_config['feed_configs'][i]['partitions'],
-                    min_value=0.001,
-                    step=0.1,
-                    format="%.3f",
-                    key=f"feed_{i}_partitions",
-                    help="Partition size from reference table"
-                )
-                st.session_state.rom_config['feed_configs'][i]['partitions'] = partitions
-
-            st.info(f"🔹 **Feed {i+1}:** {inbound} inbound → {outbound} outbound | {partitions} partitions")
 
     st.divider()
 
