@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Calculator, Server, Database, Network, DollarSign, TrendingUp, Upload, Settings, Download, Shield, FileSpreadsheet } from 'lucide-react';
 import { parseCSV, ParsedData } from './utils/csvParser';
 import { generateCostProjectionCSV, downloadCSV, generateExportFilename } from './utils/exportData';
-import { generateROMExport, ROMConfig } from './utils/romExport';
+import { generateROMExport, calculateROMCosts, ROMConfig } from './utils/romExport';
 import topicListCSV from './assets/Topic_list.csv?raw';
 
 interface TShirtSize {
@@ -58,6 +58,9 @@ const DEFAULT_ROM_CONFIG: ROMConfig = {
   gcpPerFeedAnnualCost: 9279,
   escalationRate: 0.034,
   startYear: new Date().getFullYear(),
+  recordsPerDay: 5000,
+  numIngests: 1,
+  feedConfigs: [{ inbound: 1, outbound: 1, partitions: 0.048 }],
 };
 
 function App() {
@@ -548,36 +551,106 @@ function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-slate-900 p-4 rounded-lg">
-                <h4 className="text-white font-semibold mb-4">Feed Configuration</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-slate-400 text-sm block mb-1">Inbound Feeds</label>
-                    <input
-                      type="number"
-                      value={editingROM.inboundFeeds}
-                      onChange={(e) => setEditingROM({ ...editingROM, inboundFeeds: parseInt(e.target.value) || 0 })}
-                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 text-sm block mb-1">Outbound Feeds</label>
-                    <input
-                      type="number"
-                      value={editingROM.outboundFeeds}
-                      onChange={(e) => setEditingROM({ ...editingROM, outboundFeeds: parseInt(e.target.value) || 0 })}
-                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="pt-2 border-t border-slate-700">
-                    <div className="text-slate-400 text-sm">Total Feeds</div>
+            <div className="mb-6 bg-slate-900 p-4 rounded-lg">
+              <h4 className="text-white font-semibold mb-4">Project Basics</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Records per Day</label>
+                  <input
+                    type="number"
+                    value={editingROM.recordsPerDay ?? 5000}
+                    onChange={(e) => setEditingROM({ ...editingROM, recordsPerDay: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Number of Ingests</label>
+                  <input
+                    type="number"
+                    value={editingROM.numIngests ?? 1}
+                    min={1}
+                    max={10}
+                    onChange={(e) => {
+                      const numIngests = Math.max(1, parseInt(e.target.value) || 1);
+                      const feedConfigs = editingROM.feedConfigs ?? [];
+                      const newFeedConfigs = Array.from({ length: numIngests }, (_, i) =>
+                        feedConfigs[i] ?? { inbound: 1, outbound: 1, partitions: 0.048 }
+                      );
+                      setEditingROM({ ...editingROM, numIngests, feedConfigs: newFeedConfigs });
+                    }}
+                    className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <div className="w-full pt-2 border-t border-slate-700">
+                    <div className="text-slate-400 text-sm">Total Partitions</div>
                     <div className="text-xl font-bold text-white">
-                      {editingROM.inboundFeeds + editingROM.outboundFeeds}
+                      {(editingROM.feedConfigs ?? []).reduce((sum, f) => sum + f.partitions, 0).toFixed(3)}
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="mb-6">
+              <h4 className="text-white font-semibold mb-4">Feed Patterns</h4>
+              <div className="space-y-4">
+                {(editingROM.feedConfigs ?? [{ inbound: 1, outbound: 1, partitions: 0.048 }]).map((feed, idx) => (
+                  <div key={idx} className="bg-slate-900 p-4 rounded-lg">
+                    <div className="text-white font-medium mb-3">Feed {idx + 1}</div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-slate-400 text-sm block mb-1">Inbound Topics</label>
+                        <input
+                          type="number"
+                          value={feed.inbound}
+                          min={1}
+                          onChange={(e) => {
+                            const feedConfigs = [...(editingROM.feedConfigs ?? [])];
+                            feedConfigs[idx] = { ...feedConfigs[idx], inbound: parseInt(e.target.value) || 1 };
+                            setEditingROM({ ...editingROM, feedConfigs });
+                          }}
+                          className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-400 text-sm block mb-1">Outbound Topics</label>
+                        <input
+                          type="number"
+                          value={feed.outbound}
+                          min={1}
+                          onChange={(e) => {
+                            const feedConfigs = [...(editingROM.feedConfigs ?? [])];
+                            feedConfigs[idx] = { ...feedConfigs[idx], outbound: parseInt(e.target.value) || 1 };
+                            setEditingROM({ ...editingROM, feedConfigs });
+                          }}
+                          className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-400 text-sm block mb-1">Partitions (GB)</label>
+                        <input
+                          type="number"
+                          value={feed.partitions}
+                          step="0.001"
+                          onChange={(e) => {
+                            const feedConfigs = [...(editingROM.feedConfigs ?? [])];
+                            feedConfigs[idx] = { ...feedConfigs[idx], partitions: parseFloat(e.target.value) || 0 };
+                            setEditingROM({ ...editingROM, feedConfigs });
+                          }}
+                          className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm text-slate-400">
+                      {feed.inbound} inbound → {feed.outbound} outbound | {feed.partitions.toFixed(3)} partitions
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
               <div className="bg-slate-900 p-4 rounded-lg">
                 <h4 className="text-white font-semibold mb-4">Data Engineering</h4>
@@ -677,21 +750,30 @@ function App() {
             <div className="mt-6 p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-blue-300 text-sm">Total DE Cost</div>
+                  <div className="text-blue-300 text-sm">One-Time Engineering</div>
                   <div className="text-2xl font-bold text-white">
-                    ${Math.round((editingROM.inboundFeeds * editingROM.inboundHours + editingROM.outboundFeeds * editingROM.outboundHours + editingROM.normalizationHours) * editingROM.deHourlyRate + editingROM.workspaceSetupCost).toLocaleString()}
+                    ${Math.round(calculateROMCosts(editingROM).breakdown.oneTimeDevelopment).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {calculateROMCosts(editingROM).totalInboundFeeds} in + {calculateROMCosts(editingROM).totalOutboundFeeds} out topics
                   </div>
                 </div>
                 <div>
-                  <div className="text-blue-300 text-sm">First Year Cloud Cost</div>
+                  <div className="text-blue-300 text-sm">First Year Cloud</div>
                   <div className="text-2xl font-bold text-white">
-                    ${Math.round(editingROM.confluentAnnualCost + (editingROM.inboundFeeds + editingROM.outboundFeeds) * editingROM.gcpPerFeedAnnualCost).toLocaleString()}
+                    ${Math.round(calculateROMCosts(editingROM).breakdown.firstYearCloudCost).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {calculateROMCosts(editingROM).partitionUtilizationPct.toFixed(2)}% network utilization
                   </div>
                 </div>
                 <div>
-                  <div className="text-blue-300 text-sm">Initial Investment</div>
+                  <div className="text-blue-300 text-sm">7-Year Total</div>
                   <div className="text-2xl font-bold text-white">
-                    ${Math.round((editingROM.inboundFeeds * editingROM.inboundHours + editingROM.outboundFeeds * editingROM.outboundHours + editingROM.normalizationHours) * editingROM.deHourlyRate + editingROM.workspaceSetupCost + editingROM.confluentAnnualCost + (editingROM.inboundFeeds + editingROM.outboundFeeds) * editingROM.gcpPerFeedAnnualCost).toLocaleString()}
+                    ${Math.round(calculateROMCosts(editingROM).breakdown.totalProjectCost).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {editingROM.numIngests ?? 1} ingests | {calculateROMCosts(editingROM).totalPartitions.toFixed(3)} partitions
                   </div>
                 </div>
               </div>

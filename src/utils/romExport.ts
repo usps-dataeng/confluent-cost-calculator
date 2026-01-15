@@ -1,3 +1,9 @@
+export interface FeedConfig {
+  inbound: number;
+  outbound: number;
+  partitions: number;
+}
+
 export interface ROMConfig {
   inboundFeeds: number;
   outboundFeeds: number;
@@ -10,6 +16,9 @@ export interface ROMConfig {
   gcpPerFeedAnnualCost: number;
   escalationRate: number;
   startYear: number;
+  recordsPerDay?: number;
+  numIngests?: number;
+  feedConfigs?: FeedConfig[];
 }
 
 interface YearlyROMCost {
@@ -23,10 +32,16 @@ function formatInThousands(value: number): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-function calculateROMCosts(config: ROMConfig): {
+export function calculateROMCosts(config: ROMConfig): {
   initialInvestment: YearlyROMCost[];
   operatingVariance: YearlyROMCost[];
   totalFeeds: number;
+  totalPartitions: number;
+  totalInboundFeeds: number;
+  totalOutboundFeeds: number;
+  feedConfigs: FeedConfig[];
+  recordsPerDay: number;
+  partitionUtilizationPct: number;
   breakdown: {
     inboundCost: number;
     outboundCost: number;
@@ -34,24 +49,57 @@ function calculateROMCosts(config: ROMConfig): {
     workspaceSetup: number;
     confluentCost: number;
     gcpCost: number;
+    networkCost: number;
     oneTimeDevelopment: number;
     cloudInfrastructure7Year: number;
     operatingVariance6Year: number;
     totalProjectCost: number;
+    firstYearCloudCost: number;
   };
 } {
-  const totalFeeds = config.inboundFeeds + config.outboundFeeds;
+  // Calculate based on new feed_configs structure
+  const numIngests = config.numIngests ?? 1;
+  const feedConfigs = config.feedConfigs ?? [{ inbound: 1, outbound: 1, partitions: 0.048 }];
+  const recordsPerDay = config.recordsPerDay ?? 5000;
 
-  const inboundCost = config.inboundFeeds * config.inboundHours * config.deHourlyRate;
-  const outboundCost = config.outboundFeeds * config.outboundHours * config.deHourlyRate;
-  const normalizationCost = config.normalizationHours * config.deHourlyRate;
+  // Calculate total feeds and partitions from feedConfigs
+  const totalInboundFeeds = feedConfigs.reduce((sum, f) => sum + f.inbound, 0);
+  const totalOutboundFeeds = feedConfigs.reduce((sum, f) => sum + f.outbound, 0);
+  const totalFeeds = numIngests; // Number of separate ingests
+  const totalPartitions = feedConfigs.reduce((sum, f) => sum + f.partitions, 0);
+
+  // Calculate engineering costs (scales with number of topics)
+  const inboundCost = totalInboundFeeds * config.inboundHours * config.deHourlyRate;
+  const outboundCost = totalOutboundFeeds * config.outboundHours * config.deHourlyRate;
+  const normalizationCost = config.normalizationHours * config.deHourlyRate * totalFeeds;
   const workspaceSetup = config.workspaceSetupCost;
 
   const oneTimeDevelopment = inboundCost + outboundCost + normalizationCost + workspaceSetup;
 
-  const confluentCost = config.confluentAnnualCost;
-  const gcpCost = totalFeeds * config.gcpPerFeedAnnualCost;
-  const firstYearCloudCost = confluentCost + gcpCost;
+  // Cloud costs - scale with partition usage
+  const baseConfluentAnnual = config.confluentAnnualCost;
+  const baseGcpAnnual = config.gcpPerFeedAnnualCost;
+
+  // Network capacity: Reference shows 100 total partitions across all sources
+  const TOTAL_NETWORK_PARTITIONS = 100.0;
+  const partitionUtilization = totalPartitions / TOTAL_NETWORK_PARTITIONS;
+
+  // Confluent cost scales with partitions (more partitions = more throughput)
+  const confluentCost = baseConfluentAnnual * totalFeeds * (1 + partitionUtilization);
+
+  // GCP cost scales with both feeds and partitions
+  // Storage scales with records per day (rough estimate: 1KB per record)
+  const recordsPerYear = recordsPerDay * 365;
+  const storageGBPerYear = recordsPerYear / (1024 * 1024); // Convert to GB
+  const storageMultiplier = 1 + (storageGBPerYear / 1000); // Scale factor
+
+  const gcpCost = baseGcpAnnual * totalFeeds * storageMultiplier;
+
+  // Network costs based on partition usage
+  const baseNetworkAnnual = 120000; // $10k/month baseline
+  const networkCost = baseNetworkAnnual * partitionUtilization;
+
+  const firstYearCloudCost = confluentCost + gcpCost + networkCost;
 
   const initialInvestment: YearlyROMCost[] = [
     {
@@ -86,6 +134,12 @@ function calculateROMCosts(config: ROMConfig): {
     initialInvestment,
     operatingVariance,
     totalFeeds,
+    totalPartitions,
+    totalInboundFeeds,
+    totalOutboundFeeds,
+    feedConfigs,
+    recordsPerDay,
+    partitionUtilizationPct: partitionUtilization * 100,
     breakdown: {
       inboundCost,
       outboundCost,
@@ -93,10 +147,12 @@ function calculateROMCosts(config: ROMConfig): {
       workspaceSetup,
       confluentCost,
       gcpCost,
+      networkCost,
       oneTimeDevelopment,
       cloudInfrastructure7Year,
       operatingVariance6Year,
       totalProjectCost,
+      firstYearCloudCost,
     },
   };
 }
