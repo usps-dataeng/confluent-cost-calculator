@@ -47,8 +47,8 @@ const DEFAULT_FLAT_COSTS: FlatCosts = {
 };
 
 const DEFAULT_ROM_CONFIG: ROMConfig = {
-  inboundFeeds: 1,
-  outboundFeeds: 1,
+  inboundFeeds: 12,
+  outboundFeeds: 12,
   deHourlyRate: 80,
   inboundHours: 296,
   outboundHours: 254,
@@ -60,7 +60,7 @@ const DEFAULT_ROM_CONFIG: ROMConfig = {
   startYear: new Date().getFullYear(),
   recordsPerDay: 5000,
   numIngests: 1,
-  feedConfigs: [{ inbound: 1, outbound: 1, partitions: 0.048 }],
+  feedConfigs: [{ inbound: 12, outbound: 12, partitions: 0.576 }],
 };
 
 function App() {
