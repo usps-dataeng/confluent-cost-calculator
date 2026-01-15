@@ -76,7 +76,7 @@ export function calculateROMCosts(config: ROMConfig): {
 
   const oneTimeDevelopment = inboundCost + outboundCost + normalizationCost + workspaceSetup;
 
-  // Cloud costs - scale with partition usage
+  // Cloud costs - scale with number of topics (inbound + outbound)
   const baseConfluentAnnual = config.confluentAnnualCost;
   const baseGcpAnnual = config.gcpPerFeedAnnualCost;
 
@@ -84,20 +84,22 @@ export function calculateROMCosts(config: ROMConfig): {
   const TOTAL_NETWORK_PARTITIONS = 100.0;
   const partitionUtilization = totalPartitions / TOTAL_NETWORK_PARTITIONS;
 
-  // Confluent cost scales with partitions (more partitions = more throughput)
-  const confluentCost = baseConfluentAnnual * totalFeeds * (1 + partitionUtilization);
+  // Confluent cost scales with number of topics (more topics = more data streams)
+  // Each topic (inbound + outbound) requires Confluent resources
+  const totalTopics = totalInboundFeeds + totalOutboundFeeds;
+  const confluentCost = baseConfluentAnnual * totalTopics * (1 + partitionUtilization);
 
-  // GCP cost scales with both feeds and partitions
+  // GCP cost scales with number of topics and data volume
   // Storage scales with records per day (rough estimate: 1KB per record)
   const recordsPerYear = recordsPerDay * 365;
   const storageGBPerYear = recordsPerYear / (1024 * 1024); // Convert to GB
   const storageMultiplier = 1 + (storageGBPerYear / 1000); // Scale factor
 
-  const gcpCost = baseGcpAnnual * totalFeeds * storageMultiplier;
+  const gcpCost = baseGcpAnnual * totalTopics * storageMultiplier;
 
-  // Network costs based on partition usage
+  // Network costs based on partition usage and number of topics
   const baseNetworkAnnual = 120000; // $10k/month baseline
-  const networkCost = baseNetworkAnnual * partitionUtilization;
+  const networkCost = baseNetworkAnnual * partitionUtilization * (totalTopics / 2);
 
   const firstYearCloudCost = confluentCost + gcpCost + networkCost;
 
