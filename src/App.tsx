@@ -59,8 +59,8 @@ const DEFAULT_ROM_CONFIG: ROMConfig = {
   escalationRate: 0.034,
   startYear: new Date().getFullYear(),
   recordsPerDay: 5000,
-  numIngests: 1,
-  feedConfigs: [{ inbound: 12, outbound: 12, partitions: 0.576 }],
+  numIngests: 12,
+  feedConfigs: Array.from({ length: 12 }, () => ({ inbound: 1, outbound: 1, partitions: 0.048 })),
 };
 
 function App() {
@@ -692,7 +692,7 @@ function App() {
                     type="number"
                     value={editingROM.numIngests ?? 1}
                     min={1}
-                    max={10}
+                    max={15}
                     onChange={(e) => {
                       const numIngests = Math.max(1, parseInt(e.target.value) || 1);
                       const feedConfigs = editingROM.feedConfigs ?? [];
@@ -712,64 +712,6 @@ function App() {
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <h4 className="text-white font-semibold mb-4">Feed Patterns</h4>
-              <div className="space-y-4">
-                {(editingROM.feedConfigs ?? [{ inbound: 1, outbound: 1, partitions: 0.048 }]).map((feed, idx) => (
-                  <div key={idx} className="bg-slate-900 p-4 rounded-lg">
-                    <div className="text-white font-medium mb-3">Feed {idx + 1}</div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-slate-400 text-sm block mb-1">Inbound Topics</label>
-                        <input
-                          type="number"
-                          value={feed.inbound}
-                          min={1}
-                          onChange={(e) => {
-                            const feedConfigs = [...(editingROM.feedConfigs ?? [])];
-                            feedConfigs[idx] = { ...feedConfigs[idx], inbound: parseInt(e.target.value) || 1 };
-                            setEditingROM({ ...editingROM, feedConfigs });
-                          }}
-                          className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-400 text-sm block mb-1">Outbound Topics</label>
-                        <input
-                          type="number"
-                          value={feed.outbound}
-                          min={1}
-                          onChange={(e) => {
-                            const feedConfigs = [...(editingROM.feedConfigs ?? [])];
-                            feedConfigs[idx] = { ...feedConfigs[idx], outbound: parseInt(e.target.value) || 1 };
-                            setEditingROM({ ...editingROM, feedConfigs });
-                          }}
-                          className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-400 text-sm block mb-1">Partitions (GB)</label>
-                        <input
-                          type="number"
-                          value={feed.partitions}
-                          step="0.001"
-                          onChange={(e) => {
-                            const feedConfigs = [...(editingROM.feedConfigs ?? [])];
-                            feedConfigs[idx] = { ...feedConfigs[idx], partitions: parseFloat(e.target.value) || 0 };
-                            setEditingROM({ ...editingROM, feedConfigs });
-                          }}
-                          className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-2 text-sm text-slate-400">
-                      {feed.inbound} inbound → {feed.outbound} outbound | {feed.partitions.toFixed(3)} partitions
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
 
