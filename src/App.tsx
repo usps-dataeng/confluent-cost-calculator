@@ -598,6 +598,60 @@ function App() {
             Cost scales with: Number of topics ({romCosts.totalInboundFeeds} in + {romCosts.totalOutboundFeeds} out),
             partition usage ({romCosts.partitionUtilizationPct.toFixed(2)}%), and daily volume ({romCosts.recordsPerDay.toLocaleString()} records)
           </div>
+
+          <div className="mt-6">
+            <h4 className="text-white font-semibold mb-4">7-Year Cost Projection ({(romConfig.escalationRate * 100).toFixed(1)}% Annual Escalation)</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-600">
+                    <th className="text-left text-slate-400 font-semibold py-3 px-4">Fiscal Year</th>
+                    <th className="text-right text-slate-400 font-semibold py-3 px-4">Data Engineering</th>
+                    <th className="text-right text-slate-400 font-semibold py-3 px-4">Cloud Infrastructure</th>
+                    <th className="text-right text-slate-400 font-semibold py-3 px-4">Year Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-slate-700 bg-slate-900">
+                    <td className="py-3 px-4 text-white font-medium">FY{romConfig.startYear}</td>
+                    <td className="py-3 px-4 text-right text-white">
+                      ${romCosts.breakdown.oneTimeDevelopment.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                    <td className="py-3 px-4 text-right text-white">
+                      ${romCosts.breakdown.firstYearCloudCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                    <td className="py-3 px-4 text-right text-white font-semibold">
+                      ${(romCosts.breakdown.oneTimeDevelopment + romCosts.breakdown.firstYearCloudCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                  </tr>
+                  {romCosts.operatingVariance.map((yearData) => (
+                    <tr key={yearData.year} className="border-b border-slate-700">
+                      <td className="py-3 px-4 text-slate-300">FY{yearData.year}</td>
+                      <td className="py-3 px-4 text-right text-slate-500">$0</td>
+                      <td className="py-3 px-4 text-right text-slate-300">
+                        ${yearData.cloudInfrastructure.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </td>
+                      <td className="py-3 px-4 text-right text-slate-300 font-semibold">
+                        ${yearData.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-blue-900/30 border-t-2 border-blue-600">
+                    <td className="py-4 px-4 text-white font-bold">7-Year Total</td>
+                    <td className="py-4 px-4 text-right text-white font-bold">
+                      ${romCosts.breakdown.oneTimeDevelopment.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                    <td className="py-4 px-4 text-right text-white font-bold">
+                      ${romCosts.breakdown.cloudInfrastructure7Year.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                    <td className="py-4 px-4 text-right text-white font-bold text-lg">
+                      ${romCosts.breakdown.totalProjectCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         {showROMSettings && (
