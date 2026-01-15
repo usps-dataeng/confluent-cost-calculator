@@ -16,6 +16,7 @@ def calculate_rom_costs(config):
     # Calculate based on new feed_configs structure
     num_ingests = config.get('num_ingests', 1)
     feed_configs = config.get('feed_configs', [{'inbound': 1, 'outbound': 1, 'partitions': 0.048}])
+    records_per_day = config.get('records_per_day', 5000)
 
     # Calculate total feeds and partitions from feed_configs
     total_inbound_feeds = sum(f['inbound'] for f in feed_configs)
@@ -23,7 +24,7 @@ def calculate_rom_costs(config):
     total_feeds = num_ingests  # Number of separate ingests
     total_partitions = sum(f['partitions'] for f in feed_configs)
 
-    # Calculate engineering costs
+    # Calculate engineering costs (scales with number of topics)
     inbound_cost = total_inbound_feeds * config['inbound_hours'] * config['de_hourly_rate']
     outbound_cost = total_outbound_feeds * config['outbound_hours'] * config['de_hourly_rate']
     normalization_cost = config['normalization_hours'] * config['de_hourly_rate'] * total_feeds
@@ -31,14 +32,33 @@ def calculate_rom_costs(config):
 
     one_time_development = inbound_cost + outbound_cost + normalization_cost + workspace_setup
 
-    # Cloud costs - calculate per feed based on num_ingests
-    confluent_cost_per_feed = config['confluent_annual_cost']
-    gcp_cost_per_feed = config['gcp_per_feed_annual_cost']
+    # Cloud costs - scale with partition usage
+    # Base costs from config
+    base_confluent_annual = config['confluent_annual_cost']
+    base_gcp_annual = config['gcp_per_feed_annual_cost']
 
-    # Total cloud cost for all feeds
-    confluent_cost = confluent_cost_per_feed * total_feeds
-    gcp_cost = gcp_cost_per_feed * total_feeds
-    first_year_cloud_cost = confluent_cost + gcp_cost
+    # Network capacity: Reference shows 100 total partitions across all sources
+    # Partition ratio determines resource utilization
+    TOTAL_NETWORK_PARTITIONS = 100.0
+    partition_utilization = total_partitions / TOTAL_NETWORK_PARTITIONS
+
+    # Confluent cost scales with partitions (more partitions = more throughput)
+    confluent_cost = base_confluent_annual * total_feeds * (1 + partition_utilization)
+
+    # GCP cost scales with both feeds and partitions
+    # Storage scales with records per day (rough estimate: 1KB per record)
+    records_per_year = records_per_day * 365
+    storage_gb_per_year = records_per_year / (1024 * 1024)  # Convert to GB
+    storage_multiplier = 1 + (storage_gb_per_year / 1000)  # Scale factor
+
+    gcp_cost = base_gcp_annual * total_feeds * storage_multiplier
+
+    # Network costs based on partition usage
+    # Base network cost (from existing flat costs in app)
+    base_network_annual = 120000  # $10k/month baseline
+    network_cost = base_network_annual * partition_utilization
+
+    first_year_cloud_cost = confluent_cost + gcp_cost + network_cost
 
     initial_investment = [{
         'year': config['start_year'],
@@ -74,6 +94,8 @@ def calculate_rom_costs(config):
         'total_inbound_feeds': total_inbound_feeds,
         'total_outbound_feeds': total_outbound_feeds,
         'feed_configs': feed_configs,
+        'records_per_day': records_per_day,
+        'partition_utilization_pct': partition_utilization * 100,
         'breakdown': {
             'inbound_cost': inbound_cost,
             'outbound_cost': outbound_cost,
@@ -81,10 +103,12 @@ def calculate_rom_costs(config):
             'workspace_setup': workspace_setup,
             'confluent_cost': confluent_cost,
             'gcp_cost': gcp_cost,
+            'network_cost': network_cost,
             'one_time_development': one_time_development,
             'cloud_infrastructure_7year': cloud_infrastructure_7year,
             'operating_variance_6year': operating_variance_6year,
-            'total_project_cost': total_project_cost
+            'total_project_cost': total_project_cost,
+            'first_year_cloud_cost': first_year_cloud_cost
         }
     }
 
@@ -236,9 +260,15 @@ def generate_rom_export_excel(config, logo_path=None):
 
     ws.cell(row, 1, f"Number of Ingests: {results['total_feeds']}").font = normal_font
     row += 1
+    ws.cell(row, 1, f"Total Inbound Topics: {results['total_inbound_feeds']}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Total Outbound Topics: {results['total_outbound_feeds']}").font = normal_font
+    row += 1
     ws.cell(row, 1, f"Total Partitions: {results['total_partitions']:.3f}").font = normal_font
     row += 1
-    ws.cell(row, 1, f"Records per Day: {config.get('records_per_day', 'N/A'):,}").font = normal_font
+    ws.cell(row, 1, f"Network Utilization: {results['partition_utilization_pct']:.2f}%").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Records per Day: {results['records_per_day']:,}").font = normal_font
     row += 1
 
     # Feed Patterns
@@ -247,11 +277,59 @@ def generate_rom_export_excel(config, logo_path=None):
     row += 1
 
     for i, feed in enumerate(results['feed_configs'], start=1):
-        pattern_text = f"  Feed {i}: {feed['inbound']} inbound → {feed['outbound']} outbound ({feed['partitions']:.3f} partitions)"
+        pattern_text = f"  Feed {i}: {feed['inbound']} inbound → {feed['outbound']} outbound | {feed['partitions']:.3f} partitions"
         ws.cell(row, 1, pattern_text).font = normal_font
         row += 1
 
     row += 1
+
+    # Cost Breakdown Summary
+    ws[f'A{row}'] = 'Cost Breakdown Summary'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
+    row += 1
+
+    # Data Engineering Costs
+    ws[f'A{row}'] = 'DATA ENGINEERING (One-Time):'
+    ws[f'A{row}'].font = bold_font
+    row += 1
+    ws.cell(row, 1, f"  Inbound Development: ${results['breakdown']['inbound_cost']:,.0f}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"  Outbound Development: ${results['breakdown']['outbound_cost']:,.0f}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"  Normalization: ${results['breakdown']['normalization_cost']:,.0f}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"  Workspace Setup: ${results['breakdown']['workspace_setup']:,.0f}").font = normal_font
+    row += 1
+    ws[f'A{row}'] = f"  Total One-Time: ${results['breakdown']['one_time_development']:,.0f}"
+    ws[f'A{row}'].font = bold_font
+    row += 2
+
+    # Cloud Infrastructure Costs
+    ws[f'A{row}'] = 'CLOUD INFRASTRUCTURE (Annual):'
+    ws[f'A{row}'].font = bold_font
+    row += 1
+    ws.cell(row, 1, f"  Confluent Cost: ${results['breakdown']['confluent_cost']:,.0f}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"  GCP Cost: ${results['breakdown']['gcp_cost']:,.0f}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"  Network Cost: ${results['breakdown']['network_cost']:,.0f}").font = normal_font
+    row += 1
+    ws[f'A{row}'] = f"  First Year Total: ${results['breakdown']['first_year_cloud_cost']:,.0f}"
+    ws[f'A{row}'].font = bold_font
+    row += 2
+
+    # 7-Year Projection
+    ws[f'A{row}'] = '7-YEAR PROJECTION:'
+    ws[f'A{row}'].font = bold_font
+    row += 1
+    ws.cell(row, 1, f"  Cloud Infrastructure (7 years): ${results['breakdown']['cloud_infrastructure_7year']:,.0f}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"  Data Engineering (One-Time): ${results['breakdown']['one_time_development']:,.0f}").font = normal_font
+    row += 1
+    ws[f'A{row}'] = f"  TOTAL PROJECT COST: ${results['breakdown']['total_project_cost']:,.0f}"
+    ws[f'A{row}'].font = Font(name='Calibri', size=12, bold=True, color="FF0000")
+    row += 2
 
     # Year headers
     years = [config['start_year'] + i for i in range(12)]

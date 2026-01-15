@@ -722,6 +722,60 @@ with col2:
         ### **Total Yearly Cost: ${costs['total_yearly']:,.0f}**
     """)
 
+# ROM Cost Preview
+st.divider()
+st.markdown("## 📊 ROM Summary")
+
+# Calculate ROM costs to preview
+from utils.rom_export import calculate_rom_costs
+rom_results = calculate_rom_costs(st.session_state.rom_config)
+
+rom_col1, rom_col2, rom_col3 = st.columns(3)
+
+with rom_col1:
+    st.markdown(f"""
+        <div class="metric-card">
+            <h4>💼 One-Time Engineering</h4>
+            <h2>${rom_results['breakdown']['one_time_development']:,.0f}</h2>
+            <hr style="border-color: #ddd; margin: 0.5rem 0;">
+            <p style="font-size: 0.85rem; margin: 0;">
+                {rom_results['total_inbound_feeds']} inbound + {rom_results['total_outbound_feeds']} outbound topics
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+with rom_col2:
+    st.markdown(f"""
+        <div class="metric-card" style="border-left-color: #4CAF50;">
+            <h4>☁️ First Year Cloud</h4>
+            <h2>${rom_results['breakdown']['first_year_cloud_cost']:,.0f}</h2>
+            <hr style="border-color: #ddd; margin: 0.5rem 0;">
+            <p style="font-size: 0.85rem; margin: 0;">
+                Confluent: ${rom_results['breakdown']['confluent_cost']:,.0f}<br>
+                GCP: ${rom_results['breakdown']['gcp_cost']:,.0f}<br>
+                Network: ${rom_results['breakdown']['network_cost']:,.0f}
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+with rom_col3:
+    st.markdown(f"""
+        <div class="metric-card" style="border-left-color: #FF9800;">
+            <h4>📈 7-Year Total</h4>
+            <h2>${rom_results['breakdown']['total_project_cost']:,.0f}</h2>
+            <hr style="border-color: #ddd; margin: 0.5rem 0;">
+            <p style="font-size: 0.85rem; margin: 0;">
+                {rom_results['total_feeds']} ingests | {rom_results['partition_utilization_pct']:.2f}% network
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.info(f"""
+**ROM Configuration:** {rom_results['total_feeds']} ingest(s) | {rom_results['records_per_day']:,} records/day | {rom_results['total_partitions']:.3f} total partitions
+
+Cost scales with: Number of topics ({rom_results['total_inbound_feeds']} in + {rom_results['total_outbound_feeds']} out), partition usage ({rom_results['partition_utilization_pct']:.2f}%), and daily volume ({rom_results['records_per_day']:,} records)
+""")
+
 # Export functionality
 st.divider()
 col1, col2 = st.columns([3, 1])
