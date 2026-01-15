@@ -202,6 +202,9 @@ function App() {
   const inboundPartitions = Math.floor(sizeConfig.partitions / 2);
   const outboundPartitions = sizeConfig.partitions - inboundPartitions;
 
+  // Calculate ROM costs for current configuration
+  const romCosts = calculateROMCosts(romConfig);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -530,6 +533,72 @@ function App() {
             </div>
           </div>
         )}
+
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-semibold text-white">ROM Summary</h3>
+            <div className="text-sm text-slate-400">
+              {romCosts.totalInboundFeeds} inbound + {romCosts.totalOutboundFeeds} outbound topics
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-slate-900 border border-slate-600 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Database className="w-6 h-6 text-orange-400" />
+                <h4 className="text-lg font-semibold text-white">One-Time Engineering</h4>
+              </div>
+              <div className="text-4xl font-bold text-white mb-4">
+                ${romCosts.breakdown.oneTimeDevelopment.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+              <div className="text-sm text-slate-400">
+                {romCosts.totalInboundFeeds} inbound + {romCosts.totalOutboundFeeds} outbound topics
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-emerald-600 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Server className="w-6 h-6 text-emerald-400" />
+                <h4 className="text-lg font-semibold text-white">First Year Cloud</h4>
+              </div>
+              <div className="text-4xl font-bold text-white mb-4">
+                ${romCosts.breakdown.firstYearCloudCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between text-slate-300">
+                  <span>Confluent:</span>
+                  <span className="font-semibold">${romCosts.breakdown.confluentCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>GCP:</span>
+                  <span className="font-semibold">${romCosts.breakdown.gcpCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Network:</span>
+                  <span className="font-semibold">${romCosts.breakdown.networkCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-blue-600 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <TrendingUp className="w-6 h-6 text-blue-400" />
+                <h4 className="text-lg font-semibold text-white">7-Year Total</h4>
+              </div>
+              <div className="text-4xl font-bold text-white mb-4">
+                ${romCosts.breakdown.totalProjectCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+              <div className="text-sm text-slate-400">
+                {romConfig.numIngests ?? 1} ingests | {romCosts.partitionUtilizationPct.toFixed(2)}% network
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-blue-200">
+            Cost scales with: Number of topics ({romCosts.totalInboundFeeds} in + {romCosts.totalOutboundFeeds} out),
+            partition usage ({romCosts.partitionUtilizationPct.toFixed(2)}%), and daily volume ({romCosts.recordsPerDay.toLocaleString()} records)
+          </div>
+        </div>
 
         {showROMSettings && (
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6">
