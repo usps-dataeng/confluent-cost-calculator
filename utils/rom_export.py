@@ -215,15 +215,278 @@ def generate_rom_export(config):
     return '\n'.join(lines)
 
 
-def generate_rom_export_excel(config, logo_path=None):
-    """Generate formatted Excel file without external dependencies"""
+def generate_rom_export_excel_de_only(config):
+    """Generate Data Engineering Only ROM"""
     if not HAS_OPENPYXL:
         return generate_rom_export(config).encode('utf-8')
 
     results = calculate_rom_costs(config)
     wb = Workbook()
     ws = wb.active
-    ws.title = "ROM Projection"
+    ws.title = "ROM - DE Only"
+
+    # Color scheme - USPS Blue
+    usps_blue = "004B87"
+    header_fill = PatternFill(start_color=usps_blue, end_color=usps_blue, fill_type="solid")
+    light_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+    yellow_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+    header_font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
+    title_font = Font(name='Calibri', size=16, bold=True, color=usps_blue)
+    bold_font = Font(name='Calibri', size=11, bold=True)
+    normal_font = Font(name='Calibri', size=11)
+
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    row = 1
+
+    # Title
+    ws.merge_cells(f'A{row}:E{row}')
+    title_cell = ws[f'A{row}']
+    title_cell.value = 'Confluent Feed ROM - Data Engineering Only'
+    title_cell.font = title_font
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    row += 2
+
+    # Feed Configuration Summary
+    ws[f'A{row}'] = 'Feed Configuration Summary'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    ws.cell(row, 1, f"Number of Ingests: {results['total_feeds']}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Total Inbound Topics: {results['total_inbound_feeds']}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Total Outbound Topics: {results['total_outbound_feeds']}").font = normal_font
+    row += 2
+
+    # Cost Breakdown
+    ws[f'A{row}'] = 'DATA ENGINEERING COSTS (One-Time)'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = yellow_fill
+    row += 1
+
+    de_items = [
+        ('Inbound Development', results['breakdown']['inbound_cost']),
+        ('Outbound Development', results['breakdown']['outbound_cost']),
+        ('Normalization', results['breakdown']['normalization_cost']),
+        ('Workspace Setup', results['breakdown']['workspace_setup']),
+    ]
+
+    for label, value in de_items:
+        ws.cell(row, 1, label).border = thin_border
+        ws.cell(row, 2, value).number_format = '$#,##0'
+        ws.cell(row, 2).border = thin_border
+        row += 1
+
+    ws.cell(row, 1, 'TOTAL').font = bold_font
+    ws.cell(row, 1).border = thin_border
+    ws.cell(row, 1).fill = header_fill
+    ws.cell(row, 1).font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
+    ws.cell(row, 2, results['breakdown']['one_time_development']).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 2).font = Font(name='Calibri', size=12, bold=True, color="FF0000")
+    row += 2
+
+    # Assumptions
+    ws[f'A{row}'] = 'Assumptions:'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    assumptions = [
+        f"ROM covers {results['total_feeds']} EEB ingest feed(s) with inbound/outbound data processing capabilities",
+        f"Total {results['total_inbound_feeds']} inbound topics and {results['total_outbound_feeds']} outbound topics",
+        "Feed ingests data with complex processing requirements",
+        "Includes event data with facility impacts and workflow approvals",
+        "Feed includes data normalization and standardization requirements",
+        "Workspace/Environment setup costs included",
+        f"Hourly rate: {format_in_thousands(config['de_hourly_rate'])}/hour",
+        f"Inbound hours per topic: {config['inbound_hours']:.1f} hours",
+        f"Outbound hours per topic: {config['outbound_hours']:.1f} hours"
+    ]
+
+    for i, assumption in enumerate(assumptions, start=1):
+        ws.cell(row, 1, f"{i}. {assumption}").font = normal_font
+        row += 1
+
+    # Column widths
+    ws.column_dimensions['A'].width = 100
+    ws.column_dimensions['B'].width = 20
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+
+def generate_rom_export_excel_cloud_only(config):
+    """Generate Cloud Infrastructure Only ROM"""
+    if not HAS_OPENPYXL:
+        return generate_rom_export(config).encode('utf-8')
+
+    results = calculate_rom_costs(config)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "ROM - Cloud Only"
+
+    # Color scheme - USPS Blue
+    usps_blue = "004B87"
+    header_fill = PatternFill(start_color=usps_blue, end_color=usps_blue, fill_type="solid")
+    light_blue = PatternFill(start_color="D9E9F7", end_color="D9E9F7", fill_type="solid")
+    light_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+
+    header_font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
+    title_font = Font(name='Calibri', size=16, bold=True, color=usps_blue)
+    bold_font = Font(name='Calibri', size=11, bold=True)
+    normal_font = Font(name='Calibri', size=11)
+
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    row = 1
+
+    # Title
+    ws.merge_cells(f'A{row}:N{row}')
+    title_cell = ws[f'A{row}']
+    title_cell.value = 'Confluent Feed ROM - Cloud Infrastructure Only'
+    title_cell.font = title_font
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    row += 2
+
+    # Feed Configuration Summary
+    ws[f'A{row}'] = 'Feed Configuration Summary'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    ws.cell(row, 1, f"Number of Ingests: {results['total_feeds']}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Total Partitions: {results['total_partitions']:.3f}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Network Utilization: {results['partition_utilization_pct']:.2f}%").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Records per Day: {results['records_per_day']:,}").font = normal_font
+    row += 2
+
+    # Annual Cost Breakdown
+    ws[f'A{row}'] = 'CLOUD INFRASTRUCTURE (Annual)'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_blue
+    row += 1
+
+    ws.cell(row, 1, 'Confluent Cost').border = thin_border
+    ws.cell(row, 2, results['breakdown']['confluent_cost']).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+    row += 1
+
+    ws.cell(row, 1, 'GCP Cost').border = thin_border
+    ws.cell(row, 2, results['breakdown']['gcp_cost']).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+    row += 1
+
+    ws.cell(row, 1, 'Network Cost').border = thin_border
+    ws.cell(row, 2, results['breakdown']['network_cost']).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+    row += 1
+
+    ws.cell(row, 1, 'First Year Total').font = bold_font
+    ws.cell(row, 1).border = thin_border
+    ws.cell(row, 1).fill = header_fill
+    ws.cell(row, 1).font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
+    ws.cell(row, 2, results['breakdown']['first_year_cloud_cost']).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 2).font = Font(name='Calibri', size=12, bold=True, color="FF0000")
+    row += 2
+
+    # 7-Year Projection
+    years = [config['start_year'] + i for i in range(12)]
+    ws[f'A{row}'] = 'Fiscal Year'
+    ws[f'A{row}'].font = header_font
+    ws[f'A{row}'].fill = header_fill
+    ws[f'A{row}'].border = thin_border
+
+    for idx, year in enumerate(years, start=2):
+        cell = ws.cell(row, idx, year)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    ws.cell(row, 14, 'Total').font = header_font
+    ws.cell(row, 14).fill = header_fill
+    ws.cell(row, 14).alignment = Alignment(horizontal='center')
+    ws.cell(row, 14).border = thin_border
+    row += 1
+
+    # GCP/GKE/Confluent row
+    initial_cloud = results['initial_investment'][0]['cloud_infrastructure']
+    ws.cell(row, 1, 'GCP/GKE/Confluent').border = thin_border
+    ws.cell(row, 2, initial_cloud).number_format = '$#,##0'
+    ws.cell(row, 2).border = thin_border
+
+    for idx, ov in enumerate(results['operating_variance'], start=3):
+        ws.cell(row, idx, ov['cloud_infrastructure']).number_format = '$#,##0'
+        ws.cell(row, idx).border = thin_border
+
+    ws.cell(row, 14, results['breakdown']['cloud_infrastructure_7year']).number_format = '$#,##0'
+    ws.cell(row, 14).border = thin_border
+    ws.cell(row, 1).fill = light_blue
+    row += 2
+
+    # Escalation Rate
+    ws.cell(row, 1, 'Escalation Rate:').font = bold_font
+    ws.cell(row, 2, f"{config['escalation_rate'] * 100:.1f}%")
+    row += 2
+
+    # Assumptions
+    ws[f'A{row}'] = 'Assumptions:'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    assumptions = [
+        f"ROM covers {results['total_feeds']} EEB ingest feed(s)",
+        f"Network utilization: {results['partition_utilization_pct']:.2f}% ({results['total_partitions']:.3f} partitions out of 100 total)",
+        f"Daily volume: {results['records_per_day']:,} records per day",
+        f"Confluent platform required for real-time streaming: {format_in_thousands(config['confluent_annual_cost'])} base cost per feed per year",
+        f"GCP/GKE infrastructure cost: {format_in_thousands(config['gcp_per_feed_annual_cost'])} base cost per feed per year",
+        f"Network costs: {format_in_thousands(120000)} baseline, scaled by partition utilization",
+        f"Escalation rate: {config['escalation_rate'] * 100:.1f}% annually for years 2-7",
+        "Costs scale with partition usage and data volume",
+        "ROM based on current understanding of high level requirements & known attributes"
+    ]
+
+    for i, assumption in enumerate(assumptions, start=1):
+        ws.cell(row, 1, f"{i}. {assumption}").font = normal_font
+        row += 1
+
+    # Column widths
+    ws.column_dimensions['A'].width = 100
+    for col in range(2, 15):
+        ws.column_dimensions[get_column_letter(col)].width = 12
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+
+def generate_rom_export_excel(config, logo_path=None):
+    """Generate formatted Excel file with complete ROM (DE + Cloud)"""
+    if not HAS_OPENPYXL:
+        return generate_rom_export(config).encode('utf-8')
+
+    results = calculate_rom_costs(config)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "ROM - Complete"
 
     # Color scheme - USPS Blue
     usps_blue = "004B87"

@@ -3,7 +3,12 @@ import pandas as pd
 from datetime import datetime
 from utils.csv_parser import parse_csv_file, parse_databricks_table
 from utils.export_data import generate_cost_projection_csv, generate_cost_projection_excel
-from utils.rom_export import generate_rom_export, generate_rom_export_excel
+from utils.rom_export import (
+    generate_rom_export,
+    generate_rom_export_excel,
+    generate_rom_export_excel_de_only,
+    generate_rom_export_excel_cloud_only
+)
 
 # Default T-shirt sizes
 DEFAULT_TSHIRT_SIZES = {
@@ -804,15 +809,45 @@ with col2:
             )
 
         with col2:
-            rom_excel_content = generate_rom_export_excel(st.session_state.rom_config)
-            rom_excel_filename = f"confluent-rom-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
-            st.download_button(
-                label="📊 Download ROM Excel",
-                data=rom_excel_content,
-                file_name=rom_excel_filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+            # Provide three separate ROM exports
+            st.markdown("### ROM Exports")
+            rom_col1, rom_col2, rom_col3 = st.columns(3)
+
+            with rom_col1:
+                rom_de_content = generate_rom_export_excel_de_only(st.session_state.rom_config)
+                rom_de_filename = f"confluent-rom-de-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+                st.download_button(
+                    label="👨‍💻 DE Only",
+                    data=rom_de_content,
+                    file_name=rom_de_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    help="Data Engineering costs only"
+                )
+
+            with rom_col2:
+                rom_cloud_content = generate_rom_export_excel_cloud_only(st.session_state.rom_config)
+                rom_cloud_filename = f"confluent-rom-cloud-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+                st.download_button(
+                    label="☁️ Cloud Only",
+                    data=rom_cloud_content,
+                    file_name=rom_cloud_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    help="Cloud infrastructure costs only"
+                )
+
+            with rom_col3:
+                rom_complete_content = generate_rom_export_excel(st.session_state.rom_config)
+                rom_complete_filename = f"confluent-rom-complete-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+                st.download_button(
+                    label="📊 Complete",
+                    data=rom_complete_content,
+                    file_name=rom_complete_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    help="Complete ROM with DE + Cloud costs"
+                )
 
 # Formula Reference
 with st.expander("📐 Formula Reference"):
