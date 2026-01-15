@@ -76,7 +76,7 @@ export function calculateROMCosts(config: ROMConfig): {
 
   const oneTimeDevelopment = inboundCost + outboundCost + normalizationCost + workspaceSetup;
 
-  // Cloud costs - scale linearly with number of topics (inbound + outbound)
+  // Cloud costs - base cost is for 1 inbound+outbound pair, multiply by number of pairs
   const baseConfluentAnnual = config.confluentAnnualCost;
   const baseGcpAnnual = config.gcpPerFeedAnnualCost;
 
@@ -84,13 +84,10 @@ export function calculateROMCosts(config: ROMConfig): {
   const TOTAL_NETWORK_PARTITIONS = 100.0;
   const partitionUtilization = totalPartitions / TOTAL_NETWORK_PARTITIONS;
 
-  // Confluent cost scales linearly with number of topics
-  // Each topic (inbound + outbound) requires Confluent resources
-  const totalTopics = totalInboundFeeds + totalOutboundFeeds;
-  const confluentCost = baseConfluentAnnual * totalTopics;
-
-  // GCP cost scales linearly with number of topics
-  const gcpCost = baseGcpAnnual * totalTopics;
+  // Scale by number of inbound feeds (each inbound has a matching outbound)
+  // Base costs already account for the pair, so multiply by inbound count only
+  const confluentCost = baseConfluentAnnual * totalInboundFeeds;
+  const gcpCost = baseGcpAnnual * totalInboundFeeds;
 
   // Network costs scale with partition usage
   const baseNetworkAnnual = 120000; // $10k/month baseline
