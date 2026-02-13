@@ -32,10 +32,10 @@ def calculate_rom_costs(config):
 
     one_time_development = inbound_cost + outbound_cost + normalization_cost + workspace_setup
 
-    # Cloud costs - scale with partition usage
+    # Cloud costs - convert monthly costs to annual by multiplying by 12
     # Base costs from config
-    base_confluent_annual = config['confluent_annual_cost']
-    base_gcp_annual = config['gcp_per_feed_annual_cost']
+    base_confluent_annual = config.get('confluent_monthly_cost', config.get('confluent_annual_cost', 976)) * 12
+    base_gcp_annual = config.get('gcp_per_feed_monthly_cost', config.get('gcp_per_feed_annual_cost', 773)) * 12
 
     # Network capacity: Reference shows 100 total partitions across all sources
     # Partition ratio determines resource utilization
@@ -117,7 +117,9 @@ def generate_rom_export(config):
     results = calculate_rom_costs(config)
     lines = []
 
-    lines.append('Confluent Feed ROM - Rough Order of Magnitude')
+    project_name = config.get('project_name', '')
+    title = f"Confluent Feed ROM - {project_name}" if project_name else "Confluent Feed ROM - Rough Order of Magnitude"
+    lines.append(title)
     lines.append('')
 
     years = [config['start_year'] + i for i in range(12)]
@@ -184,8 +186,13 @@ def generate_rom_export(config):
     lines.append('3,Includes event data with facility impacts and workflow approvals')
     lines.append('4,Feed includes data normalization and standardization requirements')
     lines.append('5,Workspace/Environment setup costs included')
-    lines.append(f"6,Confluent platform required for real-time streaming: {format_in_thousands(config['confluent_annual_cost'])} per feed per year")
-    lines.append(f"7,GCP/GKE infrastructure cost: {format_in_thousands(config['gcp_per_feed_annual_cost'])} per feed per year for compute and storage")
+
+    # Get monthly costs (with backward compatibility for old config)
+    confluent_monthly = config.get('confluent_monthly_cost', config.get('confluent_annual_cost', 976) / 12)
+    gcp_monthly = config.get('gcp_per_feed_monthly_cost', config.get('gcp_per_feed_annual_cost', 773) / 12)
+
+    lines.append(f"6,Confluent platform required for real-time streaming: {format_in_thousands(confluent_monthly)} per feed per month ({format_in_thousands(confluent_monthly * 12)} per year)")
+    lines.append(f"7,GCP/GKE infrastructure cost: {format_in_thousands(gcp_monthly)} per feed per month ({format_in_thousands(gcp_monthly * 12)} per year) for compute and storage")
     lines.append('8,ROM based on current understanding of high level requirements & known attributes')
     lines.append('9,As requirements are refined/finalized the ROM may need to be revised')
 
@@ -201,8 +208,8 @@ def generate_rom_export(config):
     lines.append(f"15,Create outbound enterprise data assets: {format_in_thousands(config['outbound_hours'] * config['de_hourly_rate'])},{round(config['outbound_hours'])} ({round(config['outbound_hours'])} hours)")
     lines.append(f"16,Data normalization and standardization: {format_in_thousands(results['breakdown']['normalization_cost'])},{round(config['normalization_hours'])} ({config['normalization_hours']} hours - {results['total_feeds']} feeds)")
     lines.append(f"17,Workspace/Environment/Subscription Prep: {format_in_thousands(config['workspace_setup_cost'])}")
-    lines.append(f"18,Annual Confluent platform cost: {format_in_thousands(config['confluent_annual_cost'])},{round(config['confluent_annual_cost'])}")
-    lines.append(f"19,Annual GCP/GKE cost: {format_in_thousands(config['gcp_per_feed_annual_cost'])},{round(config['gcp_per_feed_annual_cost'])} per feed")
+    lines.append(f"18,Monthly Confluent platform cost: {format_in_thousands(confluent_monthly)},{round(confluent_monthly)} per month per feed ({format_in_thousands(confluent_monthly * 12)} per year)")
+    lines.append(f"19,Monthly GCP/GKE cost: {format_in_thousands(gcp_monthly)},{round(gcp_monthly)} per month per feed ({format_in_thousands(gcp_monthly * 12)} per year)")
 
     lines.append('')
     lines.append(f"Total {results['total_feeds']}-Feed Investment")
@@ -455,12 +462,16 @@ def generate_rom_export_excel_cloud_only(config):
     ws[f'A{row}'].fill = light_gray
     row += 1
 
+    # Get monthly costs (with backward compatibility for old config)
+    confluent_monthly = config.get('confluent_monthly_cost', config.get('confluent_annual_cost', 976) / 12)
+    gcp_monthly = config.get('gcp_per_feed_monthly_cost', config.get('gcp_per_feed_annual_cost', 773) / 12)
+
     assumptions = [
         f"ROM covers {results['total_feeds']} EEB ingest feed(s)",
         f"Network utilization: {results['partition_utilization_pct']:.2f}% ({results['total_partitions']:.3f} partitions out of 100 total)",
         f"Daily volume: {results['records_per_day']:,} records per day",
-        f"Confluent platform required for real-time streaming: {format_in_thousands(config['confluent_annual_cost'])} base cost per feed per year",
-        f"GCP/GKE infrastructure cost: {format_in_thousands(config['gcp_per_feed_annual_cost'])} base cost per feed per year",
+        f"Confluent platform required for real-time streaming: {format_in_thousands(confluent_monthly)} base cost per feed per month ({format_in_thousands(confluent_monthly * 12)} per year)",
+        f"GCP/GKE infrastructure cost: {format_in_thousands(gcp_monthly)} base cost per feed per month ({format_in_thousands(gcp_monthly * 12)} per year)",
         f"Network costs: {format_in_thousands(120000)} baseline, scaled by partition utilization",
         f"Escalation rate: {config['escalation_rate'] * 100:.1f}% annually for years 2-7",
         "Costs scale with partition usage and data volume",
@@ -726,14 +737,18 @@ def generate_rom_export_excel(config, logo_path=None):
     ws[f'A{row}'].fill = light_gray
     row += 1
 
+    # Get monthly costs (with backward compatibility for old config)
+    confluent_monthly = config.get('confluent_monthly_cost', config.get('confluent_annual_cost', 976) / 12)
+    gcp_monthly = config.get('gcp_per_feed_monthly_cost', config.get('gcp_per_feed_annual_cost', 773) / 12)
+
     assumptions = [
         f"ROM covers {results['total_feeds']} EEB ingest feed(s) with inbound/outbound data processing capabilities",
         "Feed ingests data with complex processing requirements",
         "Includes event data with facility impacts and workflow approvals",
         "Feed includes data normalization and standardization requirements",
         "Workspace/Environment setup costs included",
-        f"Confluent platform required for real-time streaming: {format_in_thousands(config['confluent_annual_cost'])} per feed per year",
-        f"GCP/GKE infrastructure cost: {format_in_thousands(config['gcp_per_feed_annual_cost'])} per feed per year for compute and storage",
+        f"Confluent platform required for real-time streaming: {format_in_thousands(confluent_monthly)} per feed per month ({format_in_thousands(confluent_monthly * 12)} per year)",
+        f"GCP/GKE infrastructure cost: {format_in_thousands(gcp_monthly)} per feed per month ({format_in_thousands(gcp_monthly * 12)} per year) for compute and storage",
         "ROM based on current understanding of high level requirements & known attributes",
         "As requirements are refined/finalized the ROM may need to be revised"
     ]
@@ -770,8 +785,8 @@ def generate_rom_export_excel(config, logo_path=None):
         (f"Create outbound enterprise data assets: {format_in_thousands(config['outbound_hours'] * config['de_hourly_rate'])} ({round(config['outbound_hours'])} hours)"),
         (f"Data normalization and standardization: {format_in_thousands(results['breakdown']['normalization_cost'])} ({config['normalization_hours']} hours - {results['total_feeds']} feeds)"),
         (f"Workspace/Environment/Subscription Prep: {format_in_thousands(config['workspace_setup_cost'])}"),
-        (f"Annual Confluent platform cost: {format_in_thousands(config['confluent_annual_cost'])}"),
-        (f"Annual GCP/GKE cost: {format_in_thousands(config['gcp_per_feed_annual_cost'])} per feed")
+        (f"Monthly Confluent platform cost: {format_in_thousands(confluent_monthly)} per month ({format_in_thousands(confluent_monthly * 12)} per year)"),
+        (f"Monthly GCP/GKE cost: {format_in_thousands(gcp_monthly)} per month per feed ({format_in_thousands(gcp_monthly * 12)} per year)")
     ]
 
     for item in cost_breakdown:

@@ -46,6 +46,7 @@ DEFAULT_INGESTION_RATES = {
 
 # Default ROM Configuration
 DEFAULT_ROM_CONFIG = {
+    'project_name': '',
     'inbound_feeds': 1,
     'outbound_feeds': 1,
     'de_hourly_rate': 80,
@@ -53,8 +54,8 @@ DEFAULT_ROM_CONFIG = {
     'outbound_hours': 254,
     'normalization_hours': 27.9,
     'workspace_setup_cost': 8000,
-    'confluent_annual_cost': 11709,
-    'gcp_per_feed_annual_cost': 9279,
+    'confluent_monthly_cost': 976,
+    'gcp_per_feed_monthly_cost': 773,
     'escalation_rate': 0.034,
     'start_year': datetime.now().year,
     'records_per_day': 5000,  # Daily volume
@@ -453,24 +454,36 @@ if st.session_state.show_rom_settings:
         )
 
     with cloud_col2:
-        st.session_state.rom_config['confluent_annual_cost'] = st.number_input(
-            "Confluent Annual Cost ($)",
-            value=st.session_state.rom_config['confluent_annual_cost'],
+        # Support both old and new config keys
+        if 'confluent_monthly_cost' not in st.session_state.rom_config:
+            st.session_state.rom_config['confluent_monthly_cost'] = st.session_state.rom_config.get('confluent_annual_cost', 11709) / 12
+
+        monthly_confluent = st.number_input(
+            "Confluent Monthly Cost ($/month)",
+            value=st.session_state.rom_config['confluent_monthly_cost'],
             min_value=0,
-            step=100,
-            key="confluent_annual_input",
-            help="Annual Confluent cost per feed"
+            step=10,
+            key="confluent_monthly_input",
+            help="Monthly Confluent cost per feed"
         )
+        st.session_state.rom_config['confluent_monthly_cost'] = monthly_confluent
+        st.caption(f"Annual: ${monthly_confluent * 12:,.0f}")
 
     with cloud_col3:
-        st.session_state.rom_config['gcp_per_feed_annual_cost'] = st.number_input(
-            "GCP Per Feed Annual Cost ($)",
-            value=st.session_state.rom_config['gcp_per_feed_annual_cost'],
+        # Support both old and new config keys
+        if 'gcp_per_feed_monthly_cost' not in st.session_state.rom_config:
+            st.session_state.rom_config['gcp_per_feed_monthly_cost'] = st.session_state.rom_config.get('gcp_per_feed_annual_cost', 9279) / 12
+
+        monthly_gcp = st.number_input(
+            "GCP Per Feed Monthly ($/month)",
+            value=st.session_state.rom_config['gcp_per_feed_monthly_cost'],
             min_value=0,
-            step=100,
+            step=10,
             key="gcp_per_feed_input",
-            help="Annual GCP cost per feed"
+            help="Monthly GCP cost per feed"
         )
+        st.session_state.rom_config['gcp_per_feed_monthly_cost'] = monthly_gcp
+        st.caption(f"Annual: ${monthly_gcp * 12:,.0f}")
 
     col1, col2 = st.columns(2)
     with col1:
