@@ -59,9 +59,9 @@ DEFAULT_ROM_CONFIG = {
     'escalation_rate': 0.034,
     'start_year': datetime.now().year,
     'records_per_day': 5000,  # Daily volume
-    'num_ingests': 12,  # Number of separate ingests
-    'feed_configs': [  # Configuration for each feed
-        {'inbound': 1, 'outbound': 1, 'partitions': 0.048} for _ in range(12)  # 12 ingests: 1->1 each
+    'num_ingests': 1,  # Number of separate ingests
+    'feed_configs': [  # Configuration for each feed - will be overridden by T-shirt size selection
+        {'inbound': 1, 'outbound': 1, 'partitions': 24}  # Default to Medium (24 partitions)
     ]
 }
 
@@ -714,9 +714,21 @@ with col2:
 st.divider()
 st.markdown("## 📊 ROM Summary")
 
-# Calculate ROM costs to preview
+# Calculate ROM costs to preview - use selected T-shirt size partitions
 from utils.rom_export import calculate_rom_costs
-rom_results = calculate_rom_costs(st.session_state.rom_config)
+
+# Create a preview config that uses the selected T-shirt size partitions
+preview_rom_config = st.session_state.rom_config.copy()
+preview_rom_config['feed_configs'] = [
+    {
+        'inbound': st.session_state.rom_config.get('inbound_feeds', 1),
+        'outbound': st.session_state.rom_config.get('outbound_feeds', 1),
+        'partitions': size_config['partitions']
+    }
+    for _ in range(st.session_state.rom_config.get('num_ingests', 1))
+]
+
+rom_results = calculate_rom_costs(preview_rom_config)
 
 rom_col1, rom_col2, rom_col3 = st.columns(3)
 
@@ -769,12 +781,28 @@ st.divider()
 col1, col2 = st.columns([3, 1])
 with col2:
     if st.button("📥 Export Reports", use_container_width=True, type="primary"):
+        # Update ROM config with selected T-shirt size partitions
+        export_rom_config = st.session_state.rom_config.copy()
+
+        # Get the selected size's partition count
+        selected_partitions = size_config['partitions']
+
+        # Update feed_configs with the actual partition count from the selected T-shirt size
+        export_rom_config['feed_configs'] = [
+            {
+                'inbound': st.session_state.rom_config.get('inbound_feeds', 1),
+                'outbound': st.session_state.rom_config.get('outbound_feeds', 1),
+                'partitions': selected_partitions
+            }
+            for _ in range(st.session_state.rom_config.get('num_ingests', 1))
+        ]
+
         # Provide three separate ROM exports
         st.markdown("### ROM Exports")
         rom_col1, rom_col2, rom_col3 = st.columns(3)
 
         with rom_col1:
-            rom_de_content = generate_rom_export_excel_de_only(st.session_state.rom_config)
+            rom_de_content = generate_rom_export_excel_de_only(export_rom_config)
             rom_de_filename = f"confluent-rom-de-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
             st.download_button(
                 label="DE Only",
@@ -786,7 +814,7 @@ with col2:
             )
 
         with rom_col2:
-            rom_cloud_content = generate_rom_export_excel_cloud_only(st.session_state.rom_config)
+            rom_cloud_content = generate_rom_export_excel_cloud_only(export_rom_config)
             rom_cloud_filename = f"confluent-rom-cloud-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
             st.download_button(
                 label="Cloud Only",
@@ -798,7 +826,7 @@ with col2:
             )
 
         with rom_col3:
-            rom_complete_content = generate_rom_export_excel(st.session_state.rom_config)
+            rom_complete_content = generate_rom_export_excel(export_rom_config)
             rom_complete_filename = f"confluent-rom-complete-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
             st.download_button(
                 label="Complete",
