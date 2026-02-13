@@ -177,7 +177,7 @@ with st.sidebar:
         if st.button("👕 Sizes", use_container_width=True):
             st.session_state.show_settings = not st.session_state.show_settings
     with col2:
-        if st.button("💰 Costs", use_container_width=True):
+        if st.button("💰 Cost", use_container_width=True):
             st.session_state.show_cost_settings = not st.session_state.show_cost_settings
     with col3:
         if st.button("📊 ROM", use_container_width=True):
@@ -352,6 +352,18 @@ if st.session_state.show_rom_settings:
 
     # Volume and Ingests Configuration
     st.markdown("### 📊 Project Basics")
+
+    # Project Name Input
+    if 'project_name' not in st.session_state.rom_config:
+        st.session_state.rom_config['project_name'] = ""
+
+    st.session_state.rom_config['project_name'] = st.text_input(
+        "Project Name",
+        value=st.session_state.rom_config.get('project_name', ''),
+        key="project_name_input",
+        help="Project name to appear in Excel export headers"
+    )
+
     vol_col1, vol_col2, vol_col3 = st.columns(3)
 
     with vol_col1:
@@ -744,68 +756,45 @@ st.divider()
 col1, col2 = st.columns([3, 1])
 with col2:
     if st.button("📥 Export Reports", use_container_width=True, type="primary"):
-        excel_content = generate_cost_projection_excel(
-            selected_size=selected_size,
-            partitions=size_config['partitions'],
-            storage_gb=size_config['storage_gb'],
-            cku_config=st.session_state.cku_config,
-            flat_costs=st.session_state.flat_costs,
-            costs=costs,
-            annual_increase_rate=annual_increase_rate / 100
-        )
+        # Provide three separate ROM exports
+        st.markdown("### ROM Exports")
+        rom_col1, rom_col2, rom_col3 = st.columns(3)
 
-        excel_filename = f"confluent-cost-projection-{st.session_state.selected_env}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
-
-        col1, col2 = st.columns(2)
-        with col1:
+        with rom_col1:
+            rom_de_content = generate_rom_export_excel_de_only(st.session_state.rom_config)
+            rom_de_filename = f"confluent-rom-de-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
             st.download_button(
-                label="💾 Download Cost Projection Excel",
-                data=excel_content,
-                file_name=excel_filename,
+                label="DE Only",
+                data=rom_de_content,
+                file_name=rom_de_filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                use_container_width=True,
+                help="Data Engineering costs only"
             )
 
-        with col2:
-            # Provide three separate ROM exports
-            st.markdown("### ROM Exports")
-            rom_col1, rom_col2, rom_col3 = st.columns(3)
+        with rom_col2:
+            rom_cloud_content = generate_rom_export_excel_cloud_only(st.session_state.rom_config)
+            rom_cloud_filename = f"confluent-rom-cloud-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+            st.download_button(
+                label="Cloud Only",
+                data=rom_cloud_content,
+                file_name=rom_cloud_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                help="Cloud infrastructure costs only"
+            )
 
-            with rom_col1:
-                rom_de_content = generate_rom_export_excel_de_only(st.session_state.rom_config)
-                rom_de_filename = f"confluent-rom-de-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
-                st.download_button(
-                    label="👨‍💻 DE Only",
-                    data=rom_de_content,
-                    file_name=rom_de_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    help="Data Engineering costs only"
-                )
-
-            with rom_col2:
-                rom_cloud_content = generate_rom_export_excel_cloud_only(st.session_state.rom_config)
-                rom_cloud_filename = f"confluent-rom-cloud-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
-                st.download_button(
-                    label="☁️ Cloud Only",
-                    data=rom_cloud_content,
-                    file_name=rom_cloud_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    help="Cloud infrastructure costs only"
-                )
-
-            with rom_col3:
-                rom_complete_content = generate_rom_export_excel(st.session_state.rom_config)
-                rom_complete_filename = f"confluent-rom-complete-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
-                st.download_button(
-                    label="📊 Complete",
-                    data=rom_complete_content,
-                    file_name=rom_complete_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    help="Complete ROM with DE + Cloud costs"
-                )
+        with rom_col3:
+            rom_complete_content = generate_rom_export_excel(st.session_state.rom_config)
+            rom_complete_filename = f"confluent-rom-complete-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+            st.download_button(
+                label="Complete",
+                data=rom_complete_content,
+                file_name=rom_complete_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                help="Complete ROM with DE + Cloud costs"
+            )
 
 # Formula Reference
 with st.expander("📐 Formula Reference"):

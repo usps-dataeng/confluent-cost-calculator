@@ -246,7 +246,9 @@ def generate_rom_export_excel_de_only(config):
     # Title
     ws.merge_cells(f'A{row}:E{row}')
     title_cell = ws[f'A{row}']
-    title_cell.value = 'Confluent Feed ROM - Data Engineering Only'
+    project_name = config.get('project_name', '')
+    title_text = f"{project_name} - " if project_name else ""
+    title_cell.value = f'{title_text}Confluent Feed ROM - Data Engineering Only'
     title_cell.font = title_font
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
     row += 2
@@ -355,7 +357,9 @@ def generate_rom_export_excel_cloud_only(config):
     # Title
     ws.merge_cells(f'A{row}:N{row}')
     title_cell = ws[f'A{row}']
-    title_cell.value = 'Confluent Feed ROM - Cloud Infrastructure Only'
+    project_name = config.get('project_name', '')
+    title_text = f"{project_name} - " if project_name else ""
+    title_cell.value = f'{title_text}Confluent Feed ROM - Cloud Infrastructure Only'
     title_cell.font = title_font
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
     row += 2
@@ -510,7 +514,9 @@ def generate_rom_export_excel(config, logo_path=None):
     # Title
     ws.merge_cells(f'A{row}:N{row}')
     title_cell = ws[f'A{row}']
-    title_cell.value = 'Confluent Feed ROM - Rough Order of Magnitude'
+    project_name = config.get('project_name', '')
+    title_text = f"{project_name} - " if project_name else ""
+    title_cell.value = f'{title_text}Confluent Feed ROM - Rough Order of Magnitude'
     title_cell.font = title_font
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
     row += 2
