@@ -386,34 +386,62 @@ def generate_rom_export_excel_cloud_only(config):
     ws.cell(row, 1, f"Records per Day: {results['records_per_day']:,}").font = normal_font
     row += 2
 
-    # Annual Cost Breakdown
-    ws[f'A{row}'] = 'CLOUD INFRASTRUCTURE (Annual)'
+    # Cost Breakdown - Monthly and Annual
+    ws[f'A{row}'] = 'CLOUD INFRASTRUCTURE'
     ws[f'A{row}'].font = bold_font
     ws[f'A{row}'].fill = light_blue
     row += 1
 
+    # Headers for Monthly and Annual columns
+    ws.cell(row, 1, '').border = thin_border
+    ws.cell(row, 2, 'Monthly').font = bold_font
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 2).alignment = Alignment(horizontal='center')
+    ws.cell(row, 3, 'Annual').font = bold_font
+    ws.cell(row, 3).border = thin_border
+    ws.cell(row, 3).alignment = Alignment(horizontal='center')
+    row += 1
+
+    # Calculate monthly costs
+    confluent_monthly = results['breakdown']['confluent_cost'] / 12
+    gcp_monthly = results['breakdown']['gcp_cost'] / 12
+    network_monthly = results['breakdown']['network_cost'] / 12
+
+    # Confluent Cost
     ws.cell(row, 1, 'Confluent Cost').border = thin_border
-    ws.cell(row, 2, results['breakdown']['confluent_cost']).number_format = '$#,##0'
+    ws.cell(row, 2, confluent_monthly).number_format = '$#,##0'
     ws.cell(row, 2).border = thin_border
+    ws.cell(row, 3, results['breakdown']['confluent_cost']).number_format = '$#,##0'
+    ws.cell(row, 3).border = thin_border
     row += 1
 
+    # GCP Cost
     ws.cell(row, 1, 'GCP Cost').border = thin_border
-    ws.cell(row, 2, results['breakdown']['gcp_cost']).number_format = '$#,##0'
+    ws.cell(row, 2, gcp_monthly).number_format = '$#,##0'
     ws.cell(row, 2).border = thin_border
+    ws.cell(row, 3, results['breakdown']['gcp_cost']).number_format = '$#,##0'
+    ws.cell(row, 3).border = thin_border
     row += 1
 
+    # Network Cost
     ws.cell(row, 1, 'Network Cost').border = thin_border
-    ws.cell(row, 2, results['breakdown']['network_cost']).number_format = '$#,##0'
+    ws.cell(row, 2, network_monthly).number_format = '$#,##0'
     ws.cell(row, 2).border = thin_border
+    ws.cell(row, 3, results['breakdown']['network_cost']).number_format = '$#,##0'
+    ws.cell(row, 3).border = thin_border
     row += 1
 
+    # First Year Total
     ws.cell(row, 1, 'First Year Total').font = bold_font
     ws.cell(row, 1).border = thin_border
     ws.cell(row, 1).fill = header_fill
     ws.cell(row, 1).font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
-    ws.cell(row, 2, results['breakdown']['first_year_cloud_cost']).number_format = '$#,##0'
+    ws.cell(row, 2, results['breakdown']['first_year_cloud_cost'] / 12).number_format = '$#,##0'
     ws.cell(row, 2).border = thin_border
-    ws.cell(row, 2).font = Font(name='Calibri', size=12, bold=True, color="FF0000")
+    ws.cell(row, 2).font = Font(name='Calibri', size=11, bold=True)
+    ws.cell(row, 3, results['breakdown']['first_year_cloud_cost']).number_format = '$#,##0'
+    ws.cell(row, 3).border = thin_border
+    ws.cell(row, 3).font = Font(name='Calibri', size=12, bold=True, color="FF0000")
     row += 2
 
     # 7-Year Projection
