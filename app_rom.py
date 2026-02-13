@@ -460,9 +460,9 @@ if st.session_state.show_rom_settings:
 
         monthly_confluent = st.number_input(
             "Confluent Monthly Cost ($/month)",
-            value=st.session_state.rom_config['confluent_monthly_cost'],
-            min_value=0,
-            step=10,
+            value=float(st.session_state.rom_config['confluent_monthly_cost']),
+            min_value=0.0,
+            step=10.0,
             key="confluent_monthly_input",
             help="Monthly Confluent cost per feed"
         )
@@ -476,9 +476,9 @@ if st.session_state.show_rom_settings:
 
         monthly_gcp = st.number_input(
             "GCP Per Feed Monthly ($/month)",
-            value=st.session_state.rom_config['gcp_per_feed_monthly_cost'],
-            min_value=0,
-            step=10,
+            value=float(st.session_state.rom_config['gcp_per_feed_monthly_cost']),
+            min_value=0.0,
+            step=10.0,
             key="gcp_per_feed_input",
             help="Monthly GCP cost per feed"
         )
