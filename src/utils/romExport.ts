@@ -5,6 +5,7 @@ export interface FeedConfig {
 }
 
 export interface ROMConfig {
+  projectName?: string;
   inboundFeeds: number;
   outboundFeeds: number;
   deHourlyRate: number;
@@ -12,8 +13,8 @@ export interface ROMConfig {
   outboundHours: number;
   normalizationHours: number;
   workspaceSetupCost: number;
-  confluentAnnualCost: number;
-  gcpPerFeedAnnualCost: number;
+  confluentMonthlyCost: number;
+  gcpPerFeedMonthlyCost: number;
   escalationRate: number;
   startYear: number;
   recordsPerDay?: number;
@@ -77,8 +78,9 @@ export function calculateROMCosts(config: ROMConfig): {
   const oneTimeDevelopment = inboundCost + outboundCost + normalizationCost + workspaceSetup;
 
   // Cloud costs - base cost is for 1 inbound+outbound pair, multiply by number of pairs
-  const baseConfluentAnnual = config.confluentAnnualCost;
-  const baseGcpAnnual = config.gcpPerFeedAnnualCost;
+  // Convert monthly costs to annual by multiplying by 12
+  const baseConfluentAnnual = config.confluentMonthlyCost * 12;
+  const baseGcpAnnual = config.gcpPerFeedMonthlyCost * 12;
 
   // Network capacity: Reference shows 100 total partitions across all sources
   const TOTAL_NETWORK_PARTITIONS = 100.0;
@@ -155,7 +157,10 @@ export function generateROMExport(config: ROMConfig): string {
   const results = calculateROMCosts(config);
   const lines: string[] = [];
 
-  lines.push('Confluent Feed ROM - Rough Order of Magnitude');
+  const title = config.projectName
+    ? `Confluent Feed ROM - ${config.projectName}`
+    : 'Confluent Feed ROM - Rough Order of Magnitude';
+  lines.push(title);
   lines.push('');
 
   const years = [
@@ -238,8 +243,8 @@ export function generateROMExport(config: ROMConfig): string {
   lines.push(`3,Includes event data with facility impacts and workflow approvals`);
   lines.push(`4,Feed includes data normalization and standardization requirements`);
   lines.push(`5,Workspace/Environment setup costs included`);
-  lines.push(`6,Confluent platform required for real-time streaming: ${formatInThousands(config.confluentAnnualCost)} per feed per year`);
-  lines.push(`7,GCP/GKE infrastructure cost: ${formatInThousands(config.gcpPerFeedAnnualCost)} per feed per year for compute and storage`);
+  lines.push(`6,Confluent platform required for real-time streaming: ${formatInThousands(config.confluentMonthlyCost)} per feed per month (${formatInThousands(config.confluentMonthlyCost * 12)} per year)`);
+  lines.push(`7,GCP/GKE infrastructure cost: ${formatInThousands(config.gcpPerFeedMonthlyCost)} per feed per month (${formatInThousands(config.gcpPerFeedMonthlyCost * 12)} per year) for compute and storage`);
   lines.push(`8,ROM based on current understanding of high level requirements & known attributes`);
   lines.push(`9,As requirements are refined/finalized the ROM may need to be revised`);
 
@@ -255,8 +260,8 @@ export function generateROMExport(config: ROMConfig): string {
   lines.push(`15,Create outbound enterprise data assets: ${formatInThousands(config.outboundHours * config.deHourlyRate)},${Math.round(config.outboundHours)} (${Math.round(config.outboundHours)} hours)`);
   lines.push(`16,Data normalization and standardization: ${formatInThousands(results.breakdown.normalizationCost)},${Math.round(config.normalizationHours)} (${config.normalizationHours} hours - ${results.totalFeeds} feeds)`);
   lines.push(`17,Workspace/Environment/Subscription Prep: ${formatInThousands(config.workspaceSetupCost)}`);
-  lines.push(`18,Annual Confluent platform cost: ${formatInThousands(config.confluentAnnualCost)},${Math.round(config.confluentAnnualCost)}`);
-  lines.push(`19,Annual GCP/GKE cost: ${formatInThousands(config.gcpPerFeedAnnualCost)},${Math.round(config.gcpPerFeedAnnualCost)} per feed`);
+  lines.push(`18,Monthly Confluent platform cost: ${formatInThousands(config.confluentMonthlyCost)},${Math.round(config.confluentMonthlyCost)} per month per feed (${formatInThousands(config.confluentMonthlyCost * 12)} per year)`);
+  lines.push(`19,Monthly GCP/GKE cost: ${formatInThousands(config.gcpPerFeedMonthlyCost)},${Math.round(config.gcpPerFeedMonthlyCost)} per month per feed (${formatInThousands(config.gcpPerFeedMonthlyCost * 12)} per year)`);
 
   lines.push('');
   lines.push(`Total ${results.totalFeeds}-Feed Investment`);

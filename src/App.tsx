@@ -47,6 +47,7 @@ const DEFAULT_FLAT_COSTS: FlatCosts = {
 };
 
 const DEFAULT_ROM_CONFIG: ROMConfig = {
+  projectName: '',
   inboundFeeds: 12,
   outboundFeeds: 12,
   deHourlyRate: 80,
@@ -54,8 +55,8 @@ const DEFAULT_ROM_CONFIG: ROMConfig = {
   outboundHours: 254,
   normalizationHours: 27.9,
   workspaceSetupCost: 8000,
-  confluentAnnualCost: 11709,
-  gcpPerFeedAnnualCost: 9279,
+  confluentMonthlyCost: 976,
+  gcpPerFeedMonthlyCost: 773,
   escalationRate: 0.034,
   startYear: new Date().getFullYear(),
   recordsPerDay: 5000,
@@ -132,7 +133,10 @@ function App() {
 
   const handleExportROM = () => {
     const csvContent = generateROMExport(romConfig);
-    const filename = `confluent-rom-${romConfig.startYear}-${new Date().toISOString().split('T')[0]}.csv`;
+    const projectSlug = romConfig.projectName
+      ? romConfig.projectName.toLowerCase().replace(/\s+/g, '-')
+      : 'rom';
+    const filename = `confluent-${projectSlug}-${romConfig.startYear}-${new Date().toISOString().split('T')[0]}.csv`;
     downloadCSV(csvContent, filename);
   };
 
@@ -676,7 +680,17 @@ function App() {
 
             <div className="mb-6 bg-slate-900 p-4 rounded-lg">
               <h4 className="text-white font-semibold mb-4">Project Basics</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Project Name</label>
+                  <input
+                    type="text"
+                    value={editingROM.projectName ?? ''}
+                    onChange={(e) => setEditingROM({ ...editingROM, projectName: e.target.value })}
+                    placeholder="e.g., Cloud Infrastructure Only"
+                    className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
                 <div>
                   <label className="text-slate-400 text-sm block mb-1">Records per Day</label>
                   <input
@@ -772,22 +786,28 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-slate-400 text-sm block mb-1">Confluent Annual Cost ($)</label>
+                    <label className="text-slate-400 text-sm block mb-1">Confluent Monthly Cost ($/month)</label>
                     <input
                       type="number"
-                      value={editingROM.confluentAnnualCost}
-                      onChange={(e) => setEditingROM({ ...editingROM, confluentAnnualCost: parseFloat(e.target.value) || 0 })}
+                      value={editingROM.confluentMonthlyCost}
+                      onChange={(e) => setEditingROM({ ...editingROM, confluentMonthlyCost: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                     />
+                    <div className="text-xs text-slate-500 mt-1">
+                      Annual: ${((editingROM.confluentMonthlyCost || 0) * 12).toLocaleString()}
+                    </div>
                   </div>
                   <div>
-                    <label className="text-slate-400 text-sm block mb-1">GCP/GKE Per Feed Annual ($)</label>
+                    <label className="text-slate-400 text-sm block mb-1">GCP/GKE Per Feed Monthly ($/month)</label>
                     <input
                       type="number"
-                      value={editingROM.gcpPerFeedAnnualCost}
-                      onChange={(e) => setEditingROM({ ...editingROM, gcpPerFeedAnnualCost: parseFloat(e.target.value) || 0 })}
+                      value={editingROM.gcpPerFeedMonthlyCost}
+                      onChange={(e) => setEditingROM({ ...editingROM, gcpPerFeedMonthlyCost: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                     />
+                    <div className="text-xs text-slate-500 mt-1">
+                      Annual: ${((editingROM.gcpPerFeedMonthlyCost || 0) * 12).toLocaleString()}
+                    </div>
                   </div>
                   <div>
                     <label className="text-slate-400 text-sm block mb-1">Escalation Rate (%)</label>
