@@ -6,6 +6,7 @@ try:
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.drawing.image import Image
+    from openpyxl.worksheet.datavalidation import DataValidation
     HAS_OPENPYXL = True
 except ImportError:
     HAS_OPENPYXL = False
@@ -233,11 +234,15 @@ def generate_rom_export_excel_de_tslc(config):
     ws = wb.active
     ws.title = "TSLC ROM - DE"
 
-    # Color scheme - Yellow for phase headers
+    # Color scheme - USPS Blue matching other exports
+    usps_blue = "004B87"
+    header_fill = PatternFill(start_color=usps_blue, end_color=usps_blue, fill_type="solid")
     yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-    light_gray = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+    light_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
-    header_font = Font(name='Calibri', size=11, bold=True)
+    header_font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
+    title_font = Font(name='Calibri', size=16, bold=True, color=usps_blue)
+    bold_font = Font(name='Calibri', size=11, bold=True)
     normal_font = Font(name='Calibri', size=11)
 
     thin_border = Border(
@@ -266,26 +271,59 @@ def generate_rom_export_excel_de_tslc(config):
 
     # Header
     project_name = config.get('project_name', 'CCC-Package-Pickup-Cloud')
-    ws.merge_cells(f'A{row}:H{row}')
+    ws.merge_cells(f'A{row}:I{row}')
     ws[f'A{row}'] = project_name
-    ws[f'A{row}'].font = Font(name='Calibri', size=14, bold=True)
+    ws[f'A{row}'].font = title_font
     ws[f'A{row}'].alignment = Alignment(horizontal='center')
     row += 1
 
     ws.merge_cells(f'A{row}:D{row}')
     ws[f'A{row}'] = 'Submitted by:'
     ws[f'A{row}'].font = normal_font
-    ws.merge_cells(f'E{row}:H{row}')
+    ws.merge_cells(f'E{row}:I{row}')
     ws[f'E{row}'] = f'Updated: {datetime.now().strftime("%m/%d/%Y")}'
     ws[f'E{row}'].alignment = Alignment(horizontal='right')
     row += 2
+
+    # Feed Configuration Summary
+    ws[f'A{row}'] = 'Feed Configuration Summary'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    ws.cell(row, 1, f"Number of Ingests: {results['total_feeds']}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Total Inbound Topics: {results['total_inbound_feeds']}").font = normal_font
+    row += 1
+    ws.cell(row, 1, f"Total Outbound Topics: {results['total_outbound_feeds']}").font = normal_font
+    row += 2
+
+    # DATA ENGINEERING COSTS header
+    ws[f'A{row}'] = 'DATA ENGINEERING COSTS (One-Time)'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
+    row += 1
+
+    de_items = [
+        ('Inbound Development', results['breakdown']['inbound_cost']),
+        ('Outbound Development', results['breakdown']['outbound_cost']),
+        ('Normalization', results['breakdown']['normalization_cost']),
+        ('Workspace Setup', results['breakdown']['workspace_setup']),
+    ]
+
+    for label, value in de_items:
+        ws.cell(row, 1, label).border = thin_border
+        ws.cell(row, 2, value).number_format = '$#,##0'
+        ws.cell(row, 2).border = thin_border
+        row += 1
+    row += 1
 
     # Column headers
     headers = ['', 'TSLC Phase', 'Start', 'End', 'Qty', 'Avg Rate', 'Cost', "# FTE's", 'Comments']
     for col_idx, header in enumerate(headers, start=1):
         cell = ws.cell(row, col_idx, header)
         cell.font = header_font
-        cell.fill = light_gray
+        cell.fill = header_fill
         cell.border = thin_border
         cell.alignment = Alignment(horizontal='center')
     row += 1
@@ -324,6 +362,9 @@ def generate_rom_export_excel_de_tslc(config):
 
     hourly_rate = config['de_hourly_rate']
 
+    # Track first and last phase row for date validation
+    first_phase_row = row
+
     for phase_id, phase_name, fill, hours in phases:
         ws.cell(row, 1, phase_id).border = thin_border
         ws.cell(row, 2, phase_name).border = thin_border
@@ -333,9 +374,11 @@ def generate_rom_export_excel_de_tslc(config):
             ws.cell(row, 2).fill = fill
             ws.cell(row, 2).font = header_font
 
-        # Start and End (leave empty for now)
+        # Start and End columns - set date format
         ws.cell(row, 3, '').border = thin_border
+        ws.cell(row, 3).number_format = 'mm/dd/yyyy'
         ws.cell(row, 4, '').border = thin_border
+        ws.cell(row, 4).number_format = 'mm/dd/yyyy'
 
         # Qty (hours)
         if hours and hours > 0:
@@ -364,6 +407,28 @@ def generate_rom_export_excel_de_tslc(config):
         ws.cell(row, 9, '').border = thin_border
 
         row += 1
+
+    last_phase_row = row - 1
+
+    # Add date picker data validation to Start and End columns
+    date_validation = DataValidation(type="date", operator="greaterThan", formula1="1900-01-01", showDropDown=False)
+    date_validation.error = 'Please enter a valid date in mm/dd/yyyy format'
+    date_validation.errorTitle = 'Invalid Date'
+    date_validation.prompt = 'Enter date in mm/dd/yyyy format'
+    date_validation.promptTitle = 'Date Entry'
+
+    # Add validation to Start column (C)
+    ws.add_data_validation(date_validation)
+    date_validation.add(f'C{first_phase_row}:C{last_phase_row}')
+
+    # Add validation to End column (D)
+    date_validation2 = DataValidation(type="date", operator="greaterThan", formula1="1900-01-01", showDropDown=False)
+    date_validation2.error = 'Please enter a valid date in mm/dd/yyyy format'
+    date_validation2.errorTitle = 'Invalid Date'
+    date_validation2.prompt = 'Enter date in mm/dd/yyyy format'
+    date_validation2.promptTitle = 'Date Entry'
+    ws.add_data_validation(date_validation2)
+    date_validation2.add(f'D{first_phase_row}:D{last_phase_row}')
 
     # Add summary rows
     row += 1
@@ -416,20 +481,27 @@ def generate_rom_export_excel_de_tslc(config):
     row += 2
 
     # Assumptions section
-    ws.cell(row, 1, 'Assumptions (what is included, what is not included)').font = header_font
+    ws[f'A{row}'] = 'Assumptions:'
+    ws[f'A{row}'].font = bold_font
+    ws[f'A{row}'].fill = light_gray
     row += 1
 
     assumptions = [
-        'a', f'ROM covers {results["total_feeds"]} ingest feed(s) with {results["total_inbound_feeds"]} inbound and {results["total_outbound_feeds"]} outbound data topics.',
-        'b', f'Only Data Engineering costs included. Cloud infrastructure costs are separate.',
-        'c', f'Hourly rate: ${hourly_rate}/hour. Total hours: {round(total_hours)} hours.',
-        'd', 'TSLC phases include: Initiate/Plan, Requirements, Design, Build, SIT, CAT, Release, and PM.',
-        'e', 'ROM based on current understanding of requirements and may require revision.'
+        f"1. ROM covers {results['total_feeds']} EEB ingest feed(s) with inbound/outbound data processing capabilities",
+        f"2. Total {results['total_inbound_feeds']} inbound topics and {results['total_outbound_feeds']} outbound topics",
+        "3. Feed ingests data with complex processing requirements",
+        "4. Includes event data with facility impacts and workflow approvals",
+        "5. Feed includes data normalization and standardization requirements",
+        "6. Workspace/Environment setup costs included",
+        f"7. Hourly rate: ${hourly_rate}/hour",
+        f"8. Inbound hours per topic: {config['inbound_hours']:.1f} hours",
+        f"9. Outbound hours per topic: {config['outbound_hours']:.1f} hours"
     ]
 
-    for i in range(0, len(assumptions), 2):
-        ws.cell(row, 1, assumptions[i])
-        ws.cell(row, 2, assumptions[i+1])
+    for assumption in assumptions:
+        cell = ws.cell(row, 1, assumption)
+        cell.font = normal_font
+        ws.merge_cells(f'A{row}:I{row}')
         row += 1
 
     # Column widths
