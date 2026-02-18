@@ -1,4 +1,5 @@
 import io
+from datetime import datetime
 
 try:
     from openpyxl import Workbook
@@ -220,6 +221,232 @@ def generate_rom_export(config):
     lines.append(f"24,Total Project Cost: {format_in_thousands(results['breakdown']['total_project_cost'])},{round(results['breakdown']['total_project_cost'] / 1000)}")
 
     return '\n'.join(lines)
+
+
+def generate_rom_export_excel_de_tslc(config):
+    """Generate Data Engineering TSLC ROM (Test Software Lifecycle format)"""
+    if not HAS_OPENPYXL:
+        return generate_rom_export(config).encode('utf-8')
+
+    results = calculate_rom_costs(config)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "TSLC ROM - DE"
+
+    # Color scheme - Yellow for phase headers
+    yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    light_gray = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+
+    header_font = Font(name='Calibri', size=11, bold=True)
+    normal_font = Font(name='Calibri', size=11)
+
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    # Calculate hours breakdown for TSLC
+    total_hours = (results['total_inbound_feeds'] * config['inbound_hours'] +
+                   results['total_outbound_feeds'] * config['outbound_hours'] +
+                   config['normalization_hours'] * results['total_feeds'])
+
+    # Distribute hours across TSLC phases (percentages based on typical SDLC)
+    phase_percentages = {
+        'initiate': 0.05,      # 5% - BNS Review and ROM
+        'requirements': 0.10,  # 10% - Document Functional Requirements
+        'design': 0.15,        # 15% - Document Design
+        'build': 0.45,         # 45% - Development work
+        'sit': 0.15,           # 15% - System Integration Testing
+        'cat': 0.05,           # 5% - Customer Acceptance Testing
+        'release': 0.03,       # 3% - TSLC/CRs, Deployment, Support
+        'pm': 0.02            # 2% - Program management
+    }
+
+    row = 1
+
+    # Header
+    project_name = config.get('project_name', 'CCC-Package-Pickup-Cloud')
+    ws.merge_cells(f'A{row}:H{row}')
+    ws[f'A{row}'] = project_name
+    ws[f'A{row}'].font = Font(name='Calibri', size=14, bold=True)
+    ws[f'A{row}'].alignment = Alignment(horizontal='center')
+    row += 1
+
+    ws.merge_cells(f'A{row}:D{row}')
+    ws[f'A{row}'] = 'Submitted by:'
+    ws[f'A{row}'].font = normal_font
+    ws.merge_cells(f'E{row}:H{row}')
+    ws[f'E{row}'] = f'Updated: {datetime.now().strftime("%m/%d/%Y")}'
+    ws[f'E{row}'].alignment = Alignment(horizontal='right')
+    row += 2
+
+    # Column headers
+    headers = ['', 'TSLC Phase', 'Start', 'End', 'Qty', 'Avg Rate', 'Cost', "# FTE's", 'Comments']
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row, col_idx, header)
+        cell.font = header_font
+        cell.fill = light_gray
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal='center')
+    row += 1
+
+    # TSLC Phases with hours breakdown
+    phases = [
+        ('1', 'Initiate and Plan', yellow_fill, None),
+        ('1a', 'BNS Review and ROM', None, total_hours * phase_percentages['initiate']),
+        ('2', 'Requirements', yellow_fill, None),
+        ('2a', 'Document Functional Requirements', None, total_hours * phase_percentages['requirements']),
+        ('3', 'Analysis & Design', yellow_fill, None),
+        ('3a', 'Document Design', None, total_hours * phase_percentages['design']),
+        ('4', 'Build', yellow_fill, None),
+        ('4a', 'Development work', None, total_hours * phase_percentages['build']),
+        ('4b', '', None, None),
+        ('4c', '', None, None),
+        ('4d', '', None, None),
+        ('5', 'SIT', yellow_fill, None),
+        ('5a', 'Functional SIT testing for build task 4a', None, total_hours * phase_percentages['sit'] * 0.6),
+        ('5b', 'Functional SIT testing for build tasks 4b', None, total_hours * phase_percentages['sit'] * 0.2),
+        ('5c', 'Functional SIT testing for build tasks 4c', None, total_hours * phase_percentages['sit'] * 0.1),
+        ('5d', 'Functional SIT testing for build tasks 4d', None, total_hours * phase_percentages['sit'] * 0.1),
+        ('6', 'CAT', yellow_fill, None),
+        ('6a', 'Support CAT testing for 4a', None, total_hours * phase_percentages['cat'] * 0.6),
+        ('6b', 'Support CAT testing for 4b', None, total_hours * phase_percentages['cat'] * 0.2),
+        ('', 'Support CAT testing for 4c', None, total_hours * phase_percentages['cat'] * 0.1),
+        ('', 'Support CAT testing for 4d', None, total_hours * phase_percentages['cat'] * 0.1),
+        ('7', 'Release', yellow_fill, None),
+        ('7a', 'TSLC/CRs', None, total_hours * phase_percentages['release'] * 0.4),
+        ('7b', 'Prod Deployment', None, total_hours * phase_percentages['release'] * 0.3),
+        ('7c', 'Production Support', None, total_hours * phase_percentages['release'] * 0.3),
+        ('7d', 'Program management', None, total_hours * phase_percentages['pm']),
+        ('8', 'Automated Testing', yellow_fill, None),
+        ('8a', 'Script development and testing', None, 0),
+    ]
+
+    hourly_rate = config['de_hourly_rate']
+
+    for phase_id, phase_name, fill, hours in phases:
+        ws.cell(row, 1, phase_id).border = thin_border
+        ws.cell(row, 2, phase_name).border = thin_border
+        ws.cell(row, 2).alignment = Alignment(horizontal='left')
+
+        if fill:
+            ws.cell(row, 2).fill = fill
+            ws.cell(row, 2).font = header_font
+
+        # Start and End (leave empty for now)
+        ws.cell(row, 3, '').border = thin_border
+        ws.cell(row, 4, '').border = thin_border
+
+        # Qty (hours)
+        if hours and hours > 0:
+            ws.cell(row, 5, round(hours)).border = thin_border
+            ws.cell(row, 5).alignment = Alignment(horizontal='center')
+
+            # Avg Rate
+            ws.cell(row, 6, hourly_rate).number_format = '$#,##0'
+            ws.cell(row, 6).border = thin_border
+            ws.cell(row, 6).alignment = Alignment(horizontal='center')
+
+            # Cost
+            cost = hours * hourly_rate
+            ws.cell(row, 7, cost).number_format = '$#,##0'
+            ws.cell(row, 7).border = thin_border
+            ws.cell(row, 7).alignment = Alignment(horizontal='right')
+        else:
+            ws.cell(row, 5, '').border = thin_border
+            ws.cell(row, 6, '').border = thin_border
+            ws.cell(row, 7, '').border = thin_border
+
+        # FTEs (leave empty)
+        ws.cell(row, 8, '').border = thin_border
+
+        # Comments
+        ws.cell(row, 9, '').border = thin_border
+
+        row += 1
+
+    # Add summary rows
+    row += 1
+    ws.cell(row, 1, '8').border = thin_border
+    ws.cell(row, 2, 'Total Labor:').font = header_font
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 7, results['breakdown']['one_time_development'] - config['workspace_setup_cost']).number_format = '$#,##0'
+    ws.cell(row, 7).border = thin_border
+    ws.cell(row, 7).font = header_font
+    row += 1
+
+    ws.cell(row, 1, '9').border = thin_border
+    ws.cell(row, 2, 'Total Non Labor:').font = header_font
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 7, config['workspace_setup_cost']).number_format = '$#,##0'
+    ws.cell(row, 7).border = thin_border
+    ws.cell(row, 7).font = header_font
+    row += 1
+
+    ws.cell(row, 1, '9a').border = thin_border
+    ws.cell(row, 2, 'Workspace/Environment Setup').border = thin_border
+    ws.cell(row, 7, config['workspace_setup_cost']).number_format = '$#,##0'
+    ws.cell(row, 7).border = thin_border
+    row += 1
+
+    ws.cell(row, 1, '10').border = thin_border
+    ws.cell(row, 2, 'Total Travel:').font = header_font
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 7, 0).number_format = '$#,##0'
+    ws.cell(row, 7).border = thin_border
+    row += 1
+
+    ws.cell(row, 1, '11').border = thin_border
+    ws.cell(row, 2, 'Grand Total:').font = Font(name='Calibri', size=12, bold=True)
+    ws.cell(row, 2).border = thin_border
+    ws.cell(row, 2).fill = light_gray
+    ws.cell(row, 7, results['breakdown']['one_time_development']).number_format = '$#,##0'
+    ws.cell(row, 7).border = thin_border
+    ws.cell(row, 7).font = Font(name='Calibri', size=12, bold=True)
+    row += 3
+
+    # Notes section
+    ws.cell(row, 1, 'Note').font = header_font
+    row += 1
+    ws.cell(row, 1, 'a')
+    row += 1
+    ws.cell(row, 1, 'b')
+    row += 1
+    ws.cell(row, 1, 'c')
+    row += 2
+
+    # Assumptions section
+    ws.cell(row, 1, 'Assumptions (what is included, what is not included)').font = header_font
+    row += 1
+
+    assumptions = [
+        'a', f'ROM covers {results["total_feeds"]} ingest feed(s) with {results["total_inbound_feeds"]} inbound and {results["total_outbound_feeds"]} outbound data topics.',
+        'b', f'Only Data Engineering costs included. Cloud infrastructure costs are separate.',
+        'c', f'Hourly rate: ${hourly_rate}/hour. Total hours: {round(total_hours)} hours.',
+        'd', 'TSLC phases include: Initiate/Plan, Requirements, Design, Build, SIT, CAT, Release, and PM.',
+        'e', 'ROM based on current understanding of requirements and may require revision.'
+    ]
+
+    for i in range(0, len(assumptions), 2):
+        ws.cell(row, 1, assumptions[i])
+        ws.cell(row, 2, assumptions[i+1])
+        row += 1
+
+    # Column widths
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 60
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 8
+    ws.column_dimensions['F'].width = 12
+    ws.column_dimensions['G'].width = 15
+    ws.column_dimensions['H'].width = 10
+    ws.column_dimensions['I'].width = 80
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
 
 
 def generate_rom_export_excel_de_only(config):

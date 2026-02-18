@@ -7,6 +7,7 @@ from utils.rom_export import (
     generate_rom_export,
     generate_rom_export_excel,
     generate_rom_export_excel_de_only,
+    generate_rom_export_excel_de_tslc,
     generate_rom_export_excel_cloud_only
 )
 
@@ -371,8 +372,8 @@ if st.session_state.show_rom_settings:
         st.session_state.rom_config['records_per_day'] = st.number_input(
             "Records per Day",
             value=st.session_state.rom_config.get('records_per_day', 5000),
-            min_value=0,
-            step=1000,
+            min_value=1,
+            step=1,
             key="records_per_day_input",
             help="Daily volume of records being processed"
         )
@@ -771,7 +772,7 @@ with rom_col3:
     """, unsafe_allow_html=True)
 
 st.info(f"""
-**ROM Configuration:** {rom_results['total_feeds']} ingest(s) | {rom_results['records_per_day']:,} records/day | {rom_results['total_partitions']:.3f} total partitions
+**ROM Configuration:** {rom_results['total_feeds']} ingest(s) | {rom_results['records_per_day']:,} records/day | {size_config['partitions']} total partitions (T-shirt size: {selected_size})
 
 Cost scales with: Number of topics ({rom_results['total_inbound_feeds']} in + {rom_results['total_outbound_feeds']} out), partition usage ({rom_results['partition_utilization_pct']:.2f}%), and daily volume ({rom_results['records_per_day']:,} records)
 """)
@@ -802,15 +803,15 @@ with col2:
         rom_col1, rom_col2, rom_col3 = st.columns(3)
 
         with rom_col1:
-            rom_de_content = generate_rom_export_excel_de_only(export_rom_config)
-            rom_de_filename = f"confluent-rom-de-only-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+            rom_de_content = generate_rom_export_excel_de_tslc(export_rom_config)
+            rom_de_filename = f"confluent-rom-de-tslc-{st.session_state.rom_config['start_year']}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
             st.download_button(
-                label="DE Only",
+                label="DE TSLC",
                 data=rom_de_content,
                 file_name=rom_de_filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
-                help="Data Engineering costs only"
+                help="Data Engineering costs in TSLC format"
             )
 
         with rom_col2:
