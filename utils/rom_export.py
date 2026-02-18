@@ -241,6 +241,7 @@ def generate_rom_export_excel_de_tslc(config):
     light_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
     header_font = Font(name='Calibri', size=11, bold=True, color="FFFFFF")
+    yellow_header_font = Font(name='Calibri', size=11, bold=True, color="000000")  # Black text for yellow background
     title_font = Font(name='Calibri', size=16, bold=True, color=usps_blue)
     bold_font = Font(name='Calibri', size=11, bold=True)
     normal_font = Font(name='Calibri', size=11)
@@ -372,7 +373,11 @@ def generate_rom_export_excel_de_tslc(config):
 
         if fill:
             ws.cell(row, 2).fill = fill
-            ws.cell(row, 2).font = header_font
+            # Use black font for yellow background, white for others
+            if fill == yellow_fill:
+                ws.cell(row, 2).font = yellow_header_font
+            else:
+                ws.cell(row, 2).font = header_font
 
         # Start and End columns - set date format
         ws.cell(row, 3, '').border = thin_border
