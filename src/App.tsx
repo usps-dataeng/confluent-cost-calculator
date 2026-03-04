@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Calculator, Server, Database, Network, DollarSign, TrendingUp, Upload, Settings, Download, Shield, FileSpreadsheet } from 'lucide-react';
+import { Calculator, Server, Database, Network, DollarSign, TrendingUp, Upload, Settings, Download, Shield, FileSpreadsheet, Activity } from 'lucide-react';
 import { parseCSV, ParsedData } from './utils/csvParser';
 import { generateCostProjectionCSV, downloadCSV, generateExportFilename } from './utils/exportData';
 import { generateROMExport, calculateROMCosts, ROMConfig } from './utils/romExport';
+import { calculateTechnicalCosts, generateTechnicalModelCSV, TechnicalModelInputs, DEFAULT_TECHNICAL_INPUTS } from './utils/technicalCostModel';
 import topicListCSV from './assets/Topic_list.csv?raw';
 
 interface TShirtSize {
@@ -73,12 +74,15 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showCostSettings, setShowCostSettings] = useState(false);
   const [showROMSettings, setShowROMSettings] = useState(false);
+  const [showTechnicalModel, setShowTechnicalModel] = useState(false);
   const [romConfig, setRomConfig] = useState<ROMConfig>(DEFAULT_ROM_CONFIG);
   const [editingROM, setEditingROM] = useState<ROMConfig>(DEFAULT_ROM_CONFIG);
   const [editingSizes, setEditingSizes] = useState<Record<string, TShirtSize>>(DEFAULT_TSHIRT_SIZES);
   const [editingCKU, setEditingCKU] = useState<CKUConfig>(DEFAULT_CKU_CONFIG);
   const [editingFlatCosts, setEditingFlatCosts] = useState<FlatCosts>(DEFAULT_FLAT_COSTS);
   const [annualIncreaseRate, setAnnualIncreaseRate] = useState<string>('3.4');
+  const [technicalInputs, setTechnicalInputs] = useState<TechnicalModelInputs>(DEFAULT_TECHNICAL_INPUTS);
+  const [editingTechnical, setEditingTechnical] = useState<TechnicalModelInputs>(DEFAULT_TECHNICAL_INPUTS);
 
   useEffect(() => {
     const data = parseCSV(topicListCSV);
@@ -137,6 +141,23 @@ function App() {
       ? romConfig.projectName.toLowerCase().replace(/\s+/g, '-')
       : 'rom';
     const filename = `confluent-${projectSlug}-${romConfig.startYear}-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCSV(csvContent, filename);
+  };
+
+  const handleSaveTechnicalSettings = () => {
+    setTechnicalInputs(editingTechnical);
+    setShowTechnicalModel(false);
+  };
+
+  const handleResetTechnicalSettings = () => {
+    setEditingTechnical(DEFAULT_TECHNICAL_INPUTS);
+    setTechnicalInputs(DEFAULT_TECHNICAL_INPUTS);
+  };
+
+  const handleExportTechnicalModel = () => {
+    const costs = calculateTechnicalCosts(technicalInputs);
+    const csvContent = generateTechnicalModelCSV(technicalInputs, costs);
+    const filename = `confluent-technical-model-${new Date().toISOString().split('T')[0]}.csv`;
     downloadCSV(csvContent, filename);
   };
 
@@ -208,6 +229,7 @@ function App() {
 
   // Calculate ROM costs for current configuration
   const romCosts = calculateROMCosts(romConfig);
+  const technicalCosts = calculateTechnicalCosts(technicalInputs);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -235,6 +257,13 @@ function App() {
               >
                 <FileSpreadsheet className="w-5 h-5" />
                 <span>Export ROM</span>
+              </button>
+              <button
+                onClick={handleExportTechnicalModel}
+                className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
+              >
+                <Activity className="w-5 h-5" />
+                <span>Export Technical</span>
               </button>
               <label className="cursor-pointer">
                 <input
@@ -268,6 +297,13 @@ function App() {
               >
                 <FileSpreadsheet className="w-5 h-5" />
                 <span>ROM</span>
+              </button>
+              <button
+                onClick={() => setShowTechnicalModel(!showTechnicalModel)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                <Activity className="w-5 h-5" />
+                <span>Technical</span>
               </button>
             </div>
           </div>
@@ -865,6 +901,273 @@ function App() {
             </div>
           </div>
         )}
+
+        {showTechnicalModel && (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-white">Technical Cost Model Configuration</h3>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleResetTechnicalSettings}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                >
+                  Reset to Defaults
+                </button>
+                <button
+                  onClick={handleSaveTechnicalSettings}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-slate-900 p-4 rounded-lg">
+                <h4 className="text-white font-semibold mb-4">Data Volume</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">GB per Day</label>
+                    <input
+                      type="number"
+                      value={editingTechnical.gbPerDay}
+                      onChange={(e) => setEditingTechnical({ ...editingTechnical, gbPerDay: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Messages per Second</label>
+                    <input
+                      type="number"
+                      value={editingTechnical.messagesPerSecond}
+                      onChange={(e) => setEditingTechnical({ ...editingTechnical, messagesPerSecond: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Avg Message Size (KB)</label>
+                    <input
+                      type="number"
+                      value={editingTechnical.avgMessageSizeKB}
+                      onChange={(e) => setEditingTechnical({ ...editingTechnical, avgMessageSizeKB: parseFloat(e.target.value) || 0 })}
+                      step="0.1"
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 p-4 rounded-lg">
+                <h4 className="text-white font-semibold mb-4">Configuration</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Retention Days</label>
+                    <input
+                      type="number"
+                      value={editingTechnical.retentionDays}
+                      onChange={(e) => setEditingTechnical({ ...editingTechnical, retentionDays: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Partitions</label>
+                    <input
+                      type="number"
+                      value={editingTechnical.partitions}
+                      onChange={(e) => setEditingTechnical({ ...editingTechnical, partitions: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Replication Factor</label>
+                    <input
+                      type="number"
+                      value={editingTechnical.replicationFactor}
+                      onChange={(e) => setEditingTechnical({ ...editingTechnical, replicationFactor: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 p-4 rounded-lg">
+                <h4 className="text-white font-semibold mb-4">Performance</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Peak to Average Ratio</label>
+                    <input
+                      type="number"
+                      value={editingTechnical.peakToAvgRatio}
+                      onChange={(e) => setEditingTechnical({ ...editingTechnical, peakToAvgRatio: parseFloat(e.target.value) || 0 })}
+                      step="0.1"
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="pt-2 border-t border-slate-700 mt-4">
+                    <div className="text-slate-400 text-sm">Calculated Storage</div>
+                    <div className="text-xl font-bold text-white">
+                      {calculateTechnicalCosts(editingTechnical).storageGB.toLocaleString()} GB
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-slate-700">
+                    <div className="text-slate-400 text-sm">Peak Throughput</div>
+                    <div className="text-xl font-bold text-white">
+                      {calculateTechnicalCosts(editingTechnical).throughputMBps.toLocaleString()} MB/s
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 p-4 bg-cyan-900/30 border border-cyan-700 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-center">
+                <div>
+                  <div className="text-cyan-300 text-sm">Storage</div>
+                  <div className="text-xl font-bold text-white">
+                    ${Math.round(calculateTechnicalCosts(editingTechnical).storageCostAnnual).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">annual</div>
+                </div>
+                <div>
+                  <div className="text-cyan-300 text-sm">Throughput</div>
+                  <div className="text-xl font-bold text-white">
+                    ${Math.round(calculateTechnicalCosts(editingTechnical).throughputCostAnnual).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">annual</div>
+                </div>
+                <div>
+                  <div className="text-cyan-300 text-sm">Network</div>
+                  <div className="text-xl font-bold text-white">
+                    ${Math.round(calculateTechnicalCosts(editingTechnical).networkCostAnnual).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">annual</div>
+                </div>
+                <div>
+                  <div className="text-cyan-300 text-sm">Partitions</div>
+                  <div className="text-xl font-bold text-white">
+                    ${Math.round(calculateTechnicalCosts(editingTechnical).partitionCostAnnual).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">annual</div>
+                </div>
+                <div>
+                  <div className="text-cyan-300 text-sm">Total Annual</div>
+                  <div className="text-2xl font-bold text-white">
+                    ${Math.round(calculateTechnicalCosts(editingTechnical).totalAnnual).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">${Math.round(calculateTechnicalCosts(editingTechnical).totalMonthly).toLocaleString()}/mo</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-semibold text-white">Technical Cost Model Analysis</h3>
+            <div className="text-sm text-slate-400">
+              Based on {technicalInputs.gbPerDay} GB/day, {technicalInputs.messagesPerSecond.toLocaleString()} msg/s
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="bg-slate-900 border border-cyan-600 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Database className="w-6 h-6 text-cyan-400" />
+                <h4 className="text-lg font-semibold text-white">Storage Required</h4>
+              </div>
+              <div className="text-4xl font-bold text-white mb-4">
+                {technicalCosts.storageGB.toLocaleString()} GB
+              </div>
+              <div className="text-sm text-slate-300">
+                {technicalCosts.methodology.storageCalc}
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-700">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Annual Cost:</span>
+                  <span className="text-white font-semibold">${technicalCosts.storageCostAnnual.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-orange-600 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Activity className="w-6 h-6 text-orange-400" />
+                <h4 className="text-lg font-semibold text-white">Peak Throughput</h4>
+              </div>
+              <div className="text-4xl font-bold text-white mb-4">
+                {technicalCosts.throughputMBps.toLocaleString()} MB/s
+              </div>
+              <div className="text-sm text-slate-300">
+                {technicalCosts.methodology.throughputCalc}
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-700">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Annual Cost:</span>
+                  <span className="text-white font-semibold">${technicalCosts.throughputCostAnnual.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-green-600 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <TrendingUp className="w-6 h-6 text-green-400" />
+                <h4 className="text-lg font-semibold text-white">Total Cost</h4>
+              </div>
+              <div className="text-4xl font-bold text-white mb-2">
+                ${technicalCosts.totalAnnual.toLocaleString()}
+              </div>
+              <div className="text-sm text-slate-400 mb-4">annual</div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between text-slate-300">
+                  <span>Monthly:</span>
+                  <span className="font-semibold">${technicalCosts.totalMonthly.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Network:</span>
+                  <span className="font-semibold">${technicalCosts.networkCostAnnual.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Partitions:</span>
+                  <span className="font-semibold">${technicalCosts.partitionCostAnnual.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-cyan-900/20 border border-cyan-800 rounded-lg">
+            <h4 className="text-white font-semibold mb-3">Cost Driver Methodology</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div className="flex items-start gap-2">
+                <div className="w-2 h-2 bg-cyan-400 rounded-full mt-1.5"></div>
+                <div>
+                  <div className="text-slate-300 font-semibold">Storage:</div>
+                  <div className="text-slate-400">{technicalCosts.methodology.storageCalc}</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-2 h-2 bg-orange-400 rounded-full mt-1.5"></div>
+                <div>
+                  <div className="text-slate-300 font-semibold">Throughput:</div>
+                  <div className="text-slate-400">{technicalCosts.methodology.throughputCalc}</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-2 h-2 bg-amber-400 rounded-full mt-1.5"></div>
+                <div>
+                  <div className="text-slate-300 font-semibold">Network:</div>
+                  <div className="text-slate-400">{technicalCosts.methodology.networkCalc}</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-2 h-2 bg-blue-400 rounded-full mt-1.5"></div>
+                <div>
+                  <div className="text-slate-300 font-semibold">Partitions:</div>
+                  <div className="text-slate-400">{technicalCosts.methodology.partitionCalc}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6">
           <h3 className="text-xl font-semibold text-white mb-6">Select T-Shirt Size</h3>

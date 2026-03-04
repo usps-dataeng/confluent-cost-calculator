@@ -10,6 +10,12 @@ from utils.rom_export import (
     generate_rom_export_excel_de_tslc,
     generate_rom_export_excel_cloud_only
 )
+from utils.technical_cost_model import (
+    calculate_technical_costs,
+    generate_technical_model_csv,
+    generate_technical_model_excel,
+    DEFAULT_TECHNICAL_INPUTS
+)
 
 # Default T-shirt sizes
 DEFAULT_TSHIRT_SIZES = {
@@ -94,6 +100,10 @@ if 'rom_config' not in st.session_state:
     st.session_state.rom_config = DEFAULT_ROM_CONFIG.copy()
 if 'show_rom_settings' not in st.session_state:
     st.session_state.show_rom_settings = False
+if 'technical_inputs' not in st.session_state:
+    st.session_state.technical_inputs = DEFAULT_TECHNICAL_INPUTS.copy()
+if 'show_technical_model' not in st.session_state:
+    st.session_state.show_technical_model = False
 
 # Custom CSS
 st.markdown("""
@@ -174,7 +184,7 @@ with st.sidebar:
     st.divider()
 
     # Settings toggles
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("👕 Sizes", use_container_width=True):
             st.session_state.show_settings = not st.session_state.show_settings
@@ -184,6 +194,9 @@ with st.sidebar:
     with col3:
         if st.button("📊 ROM", use_container_width=True):
             st.session_state.show_rom_settings = not st.session_state.show_rom_settings
+    with col4:
+        if st.button("⚡ Technical", use_container_width=True):
+            st.session_state.show_technical_model = not st.session_state.show_technical_model
 
 # Check if data is loaded
 if st.session_state.parsed_data is None:
@@ -517,6 +530,94 @@ if st.session_state.show_rom_settings:
 
     st.divider()
 
+# Technical Model Settings
+if st.session_state.show_technical_model:
+    st.markdown("### ⚡ Technical Cost Model Configuration")
+
+    tech_col1, tech_col2, tech_col3 = st.columns(3)
+
+    with tech_col1:
+        st.markdown("#### Data Volume")
+        st.session_state.technical_inputs['gb_per_day'] = st.number_input(
+            "GB per Day",
+            value=float(st.session_state.technical_inputs['gb_per_day']),
+            min_value=0.0,
+            step=10.0,
+            key="tech_gb_per_day"
+        )
+        st.session_state.technical_inputs['messages_per_second'] = st.number_input(
+            "Messages per Second",
+            value=float(st.session_state.technical_inputs['messages_per_second']),
+            min_value=0.0,
+            step=100.0,
+            key="tech_msg_per_sec"
+        )
+        st.session_state.technical_inputs['avg_message_size_kb'] = st.number_input(
+            "Avg Message Size (KB)",
+            value=float(st.session_state.technical_inputs['avg_message_size_kb']),
+            min_value=0.0,
+            step=0.1,
+            key="tech_msg_size"
+        )
+
+    with tech_col2:
+        st.markdown("#### Configuration")
+        st.session_state.technical_inputs['retention_days'] = st.number_input(
+            "Retention Days",
+            value=int(st.session_state.technical_inputs['retention_days']),
+            min_value=1,
+            step=1,
+            key="tech_retention"
+        )
+        st.session_state.technical_inputs['partitions'] = st.number_input(
+            "Partitions",
+            value=int(st.session_state.technical_inputs['partitions']),
+            min_value=1,
+            step=1,
+            key="tech_partitions"
+        )
+        st.session_state.technical_inputs['replication_factor'] = st.number_input(
+            "Replication Factor",
+            value=int(st.session_state.technical_inputs['replication_factor']),
+            min_value=1,
+            step=1,
+            key="tech_replication"
+        )
+
+    with tech_col3:
+        st.markdown("#### Performance")
+        st.session_state.technical_inputs['peak_to_avg_ratio'] = st.number_input(
+            "Peak to Average Ratio",
+            value=float(st.session_state.technical_inputs['peak_to_avg_ratio']),
+            min_value=1.0,
+            step=0.1,
+            key="tech_peak_ratio"
+        )
+
+        tech_costs_preview = calculate_technical_costs(st.session_state.technical_inputs)
+        st.metric("Calculated Storage", f"{tech_costs_preview['storage_gb']:,.2f} GB")
+        st.metric("Peak Throughput", f"{tech_costs_preview['throughput_mbps']:,.2f} MB/s")
+
+    st.markdown("#### Cost Preview")
+    tech_preview_col1, tech_preview_col2, tech_preview_col3, tech_preview_col4, tech_preview_col5 = st.columns(5)
+
+    with tech_preview_col1:
+        st.metric("Storage (Annual)", f"${tech_costs_preview['storage_cost_annual']:,}")
+    with tech_preview_col2:
+        st.metric("Throughput (Annual)", f"${tech_costs_preview['throughput_cost_annual']:,}")
+    with tech_preview_col3:
+        st.metric("Network (Annual)", f"${tech_costs_preview['network_cost_annual']:,}")
+    with tech_preview_col4:
+        st.metric("Partitions (Annual)", f"${tech_costs_preview['partition_cost_annual']:,}")
+    with tech_preview_col5:
+        st.metric("Total Annual", f"${tech_costs_preview['total_annual']:,}")
+
+    if st.button("🔄 Reset Technical Model to Defaults", use_container_width=True):
+        st.session_state.technical_inputs = DEFAULT_TECHNICAL_INPUTS.copy()
+        st.rerun()
+
+    st.divider()
+
 # Main content
 col1, col2, col3 = st.columns(3)
 
@@ -777,6 +878,75 @@ st.info(f"""
 Cost scales with: Number of topics ({rom_results['total_inbound_feeds']} in + {rom_results['total_outbound_feeds']} out), partition usage ({rom_results['partition_utilization_pct']:.2f}%), and daily volume ({rom_results['records_per_day']:,} records)
 """)
 
+# Technical Cost Model Analysis
+st.divider()
+st.markdown("## ⚡ Technical Cost Model Analysis")
+
+tech_costs = calculate_technical_costs(st.session_state.technical_inputs)
+
+tech_display_col1, tech_display_col2, tech_display_col3 = st.columns(3)
+
+with tech_display_col1:
+    st.markdown(f"""
+        <div class="metric-card" style="border-left-color: #00BCD4;">
+            <h4>💾 Storage Required</h4>
+            <h2>{tech_costs['storage_gb']:,.2f} GB</h2>
+            <hr style="border-color: #ddd; margin: 0.5rem 0;">
+            <p style="font-size: 0.85rem; margin: 0;">
+                {tech_costs['methodology']['storage_calc']}
+            </p>
+            <hr style="border-color: #ddd; margin: 0.5rem 0;">
+            <p style="font-size: 0.85rem; margin: 0;">
+                Annual Cost: ${tech_costs['storage_cost_annual']:,}
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+with tech_display_col2:
+    st.markdown(f"""
+        <div class="metric-card" style="border-left-color: #FF9800;">
+            <h4>⚡ Peak Throughput</h4>
+            <h2>{tech_costs['throughput_mbps']:,.2f} MB/s</h2>
+            <hr style="border-color: #ddd; margin: 0.5rem 0;">
+            <p style="font-size: 0.85rem; margin: 0;">
+                {tech_costs['methodology']['throughput_calc']}
+            </p>
+            <hr style="border-color: #ddd; margin: 0.5rem 0;">
+            <p style="font-size: 0.85rem; margin: 0;">
+                Annual Cost: ${tech_costs['throughput_cost_annual']:,}
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+with tech_display_col3:
+    st.markdown(f"""
+        <div class="metric-card" style="border-left-color: #4CAF50;">
+            <h4>💰 Total Cost</h4>
+            <h2>${tech_costs['total_annual']:,}</h2>
+            <hr style="border-color: #ddd; margin: 0.5rem 0;">
+            <p style="font-size: 0.85rem; margin: 0;">
+                Monthly: ${tech_costs['total_monthly']:,}<br>
+                Network: ${tech_costs['network_cost_annual']:,}<br>
+                Partitions: ${tech_costs['partition_cost_annual']:,}
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.info(f"""
+**Technical Model Parameters:** {st.session_state.technical_inputs['gb_per_day']} GB/day | {st.session_state.technical_inputs['messages_per_second']:,} msg/s | {st.session_state.technical_inputs['retention_days']} days retention | {st.session_state.technical_inputs['replication_factor']}x replication
+""")
+
+with st.expander("📊 Cost Driver Methodology"):
+    st.markdown(f"""
+    **Storage:** {tech_costs['methodology']['storage_calc']}
+
+    **Throughput:** {tech_costs['methodology']['throughput_calc']}
+
+    **Network:** {tech_costs['methodology']['network_calc']}
+
+    **Partitions:** {tech_costs['methodology']['partition_calc']}
+    """)
+
 # Export functionality
 st.divider()
 col1, col2 = st.columns([3, 1])
@@ -837,6 +1007,18 @@ with col2:
                 use_container_width=True,
                 help="Complete ROM with DE + Cloud costs"
             )
+
+        st.markdown("### Technical Model Export")
+        tech_export_content = generate_technical_model_excel(st.session_state.technical_inputs, tech_costs)
+        tech_export_filename = f"confluent-technical-model-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        st.download_button(
+            label="📊 Technical Model",
+            data=tech_export_content,
+            file_name=tech_export_filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            help="Technical cost model with methodology"
+        )
 
 # Formula Reference
 with st.expander("📐 Formula Reference"):
