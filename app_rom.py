@@ -528,117 +528,6 @@ if st.session_state.show_rom_settings:
 
     st.divider()
 
-# Technical Model Settings
-if st.session_state.show_technical_model:
-    st.markdown("### ⚡ Technical Cost Model Configuration")
-
-    # Show ROM sync info and button
-    st.info(f"""
-    **Current ROM Configuration:**
-    - Total Partitions: {size_config['partitions'] * num_ingests:.2f}
-    - Records per Day: {records_per_day:,}
-    """)
-
-    if st.button("🔄 Sync from ROM", use_container_width=True, type="primary"):
-        # Calculate technical defaults from ROM
-        total_partitions = size_config['partitions'] * num_ingests
-        messages_per_second = records_per_day / 86400  # Convert daily to per-second
-        gb_per_day = (messages_per_second * 86400 * 1) / (1024 * 1024)  # 1KB avg message size
-
-        # Update technical inputs
-        st.session_state.technical_inputs['partitions'] = max(1, int(total_partitions + 0.5))  # Round up
-        st.session_state.technical_inputs['messages_per_second'] = messages_per_second
-        st.session_state.technical_inputs['gb_per_day'] = gb_per_day
-
-        st.success("✅ Technical Model synced from ROM configuration!")
-        st.rerun()
-
-    st.divider()
-
-    tech_col1, tech_col2, tech_col3 = st.columns(3)
-
-    with tech_col1:
-        st.markdown("#### Data Volume")
-        st.session_state.technical_inputs['gb_per_day'] = st.number_input(
-            "GB per Day",
-            value=float(st.session_state.technical_inputs['gb_per_day']),
-            min_value=0.0,
-            step=10.0,
-            key="tech_gb_per_day"
-        )
-        st.session_state.technical_inputs['messages_per_second'] = st.number_input(
-            "Messages per Second",
-            value=float(st.session_state.technical_inputs['messages_per_second']),
-            min_value=0.0,
-            step=100.0,
-            key="tech_msg_per_sec"
-        )
-        st.session_state.technical_inputs['avg_message_size_kb'] = st.number_input(
-            "Avg Message Size (KB)",
-            value=float(st.session_state.technical_inputs['avg_message_size_kb']),
-            min_value=0.0,
-            step=0.1,
-            key="tech_msg_size"
-        )
-
-    with tech_col2:
-        st.markdown("#### Configuration")
-        st.session_state.technical_inputs['retention_days'] = st.number_input(
-            "Retention Days",
-            value=int(st.session_state.technical_inputs['retention_days']),
-            min_value=1,
-            step=1,
-            key="tech_retention"
-        )
-        st.session_state.technical_inputs['partitions'] = st.number_input(
-            "Partitions",
-            value=int(st.session_state.technical_inputs['partitions']),
-            min_value=1,
-            step=1,
-            key="tech_partitions"
-        )
-        st.session_state.technical_inputs['replication_factor'] = st.number_input(
-            "Replication Factor",
-            value=int(st.session_state.technical_inputs['replication_factor']),
-            min_value=1,
-            step=1,
-            key="tech_replication"
-        )
-
-    with tech_col3:
-        st.markdown("#### Performance")
-        st.session_state.technical_inputs['peak_to_avg_ratio'] = st.number_input(
-            "Peak to Average Ratio",
-            value=float(st.session_state.technical_inputs['peak_to_avg_ratio']),
-            min_value=1.0,
-            step=0.1,
-            key="tech_peak_ratio"
-        )
-
-        tech_costs_preview = calculate_technical_costs(st.session_state.technical_inputs)
-        st.metric("Calculated Storage", f"{tech_costs_preview['storage_gb']:,.2f} GB")
-        st.metric("Peak Throughput", f"{tech_costs_preview['throughput_mbps']:,.2f} MB/s")
-
-    st.markdown("#### Cost Preview")
-    tech_preview_col1, tech_preview_col2, tech_preview_col3, tech_preview_col4, tech_preview_col5 = st.columns(5)
-
-    with tech_preview_col1:
-        st.metric("Storage (Annual)", f"${tech_costs_preview['storage_cost_annual']:,}")
-    with tech_preview_col2:
-        st.metric("Throughput (Annual)", f"${tech_costs_preview['throughput_cost_annual']:,}")
-    with tech_preview_col3:
-        st.metric("Network (Annual)", f"${tech_costs_preview['network_cost_annual']:,}")
-    with tech_preview_col4:
-        st.metric("Partitions (Annual)", f"${tech_costs_preview['partition_cost_annual']:,}")
-    with tech_preview_col5:
-        st.metric("Total Annual", f"${tech_costs_preview['total_annual']:,}")
-
-    if st.button("🔄 Reset Technical Model to Defaults", use_container_width=True):
-        st.session_state.technical_inputs = DEFAULT_TECHNICAL_INPUTS.copy()
-        st.rerun()
-
-    st.divider()
-
 # Main content
 col1, col2, col3 = st.columns(3)
 
@@ -761,10 +650,123 @@ for idx, (size_name, config) in enumerate(st.session_state.tshirt_sizes.items())
 
 st.divider()
 
-# Get selected configuration and calculate costs
+# Get selected configuration - moved earlier to be available for Technical Model Settings
 size_config = st.session_state.tshirt_sizes[selected_size]
 num_ingests = st.session_state.rom_config.get('num_ingests', 1)
 records_per_day = st.session_state.rom_config.get('records_per_day', 5000)
+
+# Technical Model Settings
+if st.session_state.show_technical_model:
+    st.markdown("### ⚡ Technical Cost Model Configuration")
+
+    # Show ROM sync info and button
+    st.info(f"""
+    **Current ROM Configuration:**
+    - Total Partitions: {size_config['partitions'] * num_ingests:.2f}
+    - Records per Day: {records_per_day:,}
+    """)
+
+    if st.button("🔄 Sync from ROM", use_container_width=True, type="primary"):
+        # Calculate technical defaults from ROM
+        total_partitions = size_config['partitions'] * num_ingests
+        messages_per_second = records_per_day / 86400  # Convert daily to per-second
+        gb_per_day = (messages_per_second * 86400 * 1) / (1024 * 1024)  # 1KB avg message size
+
+        # Update technical inputs
+        st.session_state.technical_inputs['partitions'] = max(1, int(total_partitions + 0.5))  # Round up
+        st.session_state.technical_inputs['messages_per_second'] = messages_per_second
+        st.session_state.technical_inputs['gb_per_day'] = gb_per_day
+
+        st.success("✅ Technical Model synced from ROM configuration!")
+        st.rerun()
+
+    st.divider()
+
+    tech_col1, tech_col2, tech_col3 = st.columns(3)
+
+    with tech_col1:
+        st.markdown("#### Data Volume")
+        st.session_state.technical_inputs['gb_per_day'] = st.number_input(
+            "GB per Day",
+            value=float(st.session_state.technical_inputs['gb_per_day']),
+            min_value=0.0,
+            step=10.0,
+            key="tech_gb_per_day"
+        )
+        st.session_state.technical_inputs['messages_per_second'] = st.number_input(
+            "Messages per Second",
+            value=float(st.session_state.technical_inputs['messages_per_second']),
+            min_value=0.0,
+            step=100.0,
+            key="tech_msg_per_sec"
+        )
+        st.session_state.technical_inputs['avg_message_size_kb'] = st.number_input(
+            "Avg Message Size (KB)",
+            value=float(st.session_state.technical_inputs['avg_message_size_kb']),
+            min_value=0.0,
+            step=0.1,
+            key="tech_msg_size"
+        )
+
+    with tech_col2:
+        st.markdown("#### Configuration")
+        st.session_state.technical_inputs['retention_days'] = st.number_input(
+            "Retention Days",
+            value=int(st.session_state.technical_inputs['retention_days']),
+            min_value=1,
+            step=1,
+            key="tech_retention"
+        )
+        st.session_state.technical_inputs['partitions'] = st.number_input(
+            "Partitions",
+            value=int(st.session_state.technical_inputs['partitions']),
+            min_value=1,
+            step=1,
+            key="tech_partitions"
+        )
+        st.session_state.technical_inputs['replication_factor'] = st.number_input(
+            "Replication Factor",
+            value=int(st.session_state.technical_inputs['replication_factor']),
+            min_value=1,
+            step=1,
+            key="tech_replication"
+        )
+
+    with tech_col3:
+        st.markdown("#### Performance")
+        st.session_state.technical_inputs['peak_to_avg_ratio'] = st.number_input(
+            "Peak to Average Ratio",
+            value=float(st.session_state.technical_inputs['peak_to_avg_ratio']),
+            min_value=1.0,
+            step=0.1,
+            key="tech_peak_ratio"
+        )
+
+        tech_costs_preview = calculate_technical_costs(st.session_state.technical_inputs)
+        st.metric("Calculated Storage", f"{tech_costs_preview['storage_gb']:,.2f} GB")
+        st.metric("Peak Throughput", f"{tech_costs_preview['throughput_mbps']:,.2f} MB/s")
+
+    st.markdown("#### Cost Preview")
+    tech_preview_col1, tech_preview_col2, tech_preview_col3, tech_preview_col4, tech_preview_col5 = st.columns(5)
+
+    with tech_preview_col1:
+        st.metric("Storage (Annual)", f"${tech_costs_preview['storage_cost_annual']:,}")
+    with tech_preview_col2:
+        st.metric("Throughput (Annual)", f"${tech_costs_preview['throughput_cost_annual']:,}")
+    with tech_preview_col3:
+        st.metric("Network (Annual)", f"${tech_costs_preview['network_cost_annual']:,}")
+    with tech_preview_col4:
+        st.metric("Partitions (Annual)", f"${tech_costs_preview['partition_cost_annual']:,}")
+    with tech_preview_col5:
+        st.metric("Total Annual", f"${tech_costs_preview['total_annual']:,}")
+
+    if st.button("🔄 Reset Technical Model to Defaults", use_container_width=True):
+        st.session_state.technical_inputs = DEFAULT_TECHNICAL_INPUTS.copy()
+        st.rerun()
+
+    st.divider()
+
+# Calculate cost now that size_config is available
 costs = calculate_costs(size_config, selected_size, num_ingests, records_per_day)
 
 # Display total cost in col3 (delayed until costs are calculated)
