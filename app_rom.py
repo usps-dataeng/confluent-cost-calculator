@@ -532,6 +532,29 @@ if st.session_state.show_rom_settings:
 if st.session_state.show_technical_model:
     st.markdown("### ⚡ Technical Cost Model Configuration")
 
+    # Show ROM sync info and button
+    st.info(f"""
+    **Current ROM Configuration:**
+    - Total Partitions: {size_config['partitions'] * num_ingests:.2f}
+    - Records per Day: {records_per_day:,}
+    """)
+
+    if st.button("🔄 Sync from ROM", use_container_width=True, type="primary"):
+        # Calculate technical defaults from ROM
+        total_partitions = size_config['partitions'] * num_ingests
+        messages_per_second = records_per_day / 86400  # Convert daily to per-second
+        gb_per_day = (messages_per_second * 86400 * 1) / (1024 * 1024)  # 1KB avg message size
+
+        # Update technical inputs
+        st.session_state.technical_inputs['partitions'] = max(1, int(total_partitions + 0.5))  # Round up
+        st.session_state.technical_inputs['messages_per_second'] = messages_per_second
+        st.session_state.technical_inputs['gb_per_day'] = gb_per_day
+
+        st.success("✅ Technical Model synced from ROM configuration!")
+        st.rerun()
+
+    st.divider()
+
     tech_col1, tech_col2, tech_col3 = st.columns(3)
 
     with tech_col1:
