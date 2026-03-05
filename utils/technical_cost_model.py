@@ -156,49 +156,23 @@ def generate_technical_model_csv(inputs: Dict[str, Any], costs: Dict[str, Any]) 
     return '\n'.join(lines)
 
 def generate_technical_model_excel(inputs: Dict[str, Any], costs: Dict[str, Any]) -> bytes:
-    import io
+    """
+    Generate comprehensive technical cost model export with full formatting
+    """
+    from utils.technical_cost_export import generate_technical_export
 
-    output = io.BytesIO()
-
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_inputs = pd.DataFrame([
-            {'Parameter': 'Data Volume', 'Value': inputs['gb_per_day'], 'Unit': 'GB/day'},
-            {'Parameter': 'Message Rate', 'Value': inputs['messages_per_second'], 'Unit': 'messages/second'},
-            {'Parameter': 'Average Message Size', 'Value': inputs['avg_message_size_kb'], 'Unit': 'KB'},
-            {'Parameter': 'Retention Period', 'Value': inputs['retention_days'], 'Unit': 'days'},
-            {'Parameter': 'Partitions', 'Value': inputs['partitions'], 'Unit': 'count'},
-            {'Parameter': 'Replication Factor', 'Value': inputs['replication_factor'], 'Unit': 'x'},
-            {'Parameter': 'Peak to Average Ratio', 'Value': inputs['peak_to_avg_ratio'], 'Unit': 'x'},
-        ])
-        df_inputs.to_excel(writer, sheet_name='Input Parameters', index=False)
-
-        df_calculated = pd.DataFrame([
-            {'Metric': 'Total Storage Required', 'Value': costs['storage_gb'], 'Unit': 'GB'},
-            {'Metric': 'Average Throughput', 'Value': round(costs['throughput_mbps'] / inputs['peak_to_avg_ratio'], 2), 'Unit': 'MB/s'},
-            {'Metric': 'Peak Throughput', 'Value': costs['throughput_mbps'], 'Unit': 'MB/s'},
-        ])
-        df_calculated.to_excel(writer, sheet_name='Calculated Metrics', index=False)
-
-        df_costs = pd.DataFrame([
-            {'Component': 'Storage', 'Annual Cost': costs['storage_cost_annual'], 'Calculation': costs['methodology']['storage_calc']},
-            {'Component': 'Throughput', 'Annual Cost': costs['throughput_cost_annual'], 'Calculation': costs['methodology']['throughput_calc']},
-            {'Component': 'Network', 'Annual Cost': costs['network_cost_annual'], 'Calculation': costs['methodology']['network_calc']},
-            {'Component': 'Partitions', 'Annual Cost': costs['partition_cost_annual'], 'Calculation': costs['methodology']['partition_calc']},
-            {'Component': 'Retention', 'Annual Cost': costs['retention_cost_annual'], 'Calculation': 'Additional 5% for retention management'},
-            {'Component': '', 'Annual Cost': '', 'Calculation': ''},
-            {'Component': 'TOTAL', 'Annual Cost': costs['total_annual'], 'Calculation': f"Monthly: ${costs['total_monthly']:,}"},
-        ])
-        df_costs.to_excel(writer, sheet_name='Cost Breakdown', index=False)
-
-        df_drivers = pd.DataFrame([
-            {'Driver': 'Data Volume (GB/day)', 'Impact': 'High', 'Notes': 'Linear relationship with storage and network costs'},
-            {'Driver': 'Message Rate (msg/s)', 'Impact': 'High', 'Notes': 'Drives throughput and compute requirements'},
-            {'Driver': 'Retention Period (days)', 'Impact': 'Medium', 'Notes': 'Multiplies storage requirements'},
-            {'Driver': 'Partitions', 'Impact': 'Medium', 'Notes': 'Fixed cost per partition for parallelism'},
-            {'Driver': 'Replication Factor', 'Impact': 'High', 'Notes': 'Multiplies storage costs for durability'},
-            {'Driver': 'Peak to Average Ratio', 'Impact': 'Medium', 'Notes': 'Impacts throughput capacity planning'},
-        ])
-        df_drivers.to_excel(writer, sheet_name='Cost Drivers', index=False)
-
-    output.seek(0)
-    return output.getvalue()
+    return generate_technical_export(
+        data_volume_gb_day=inputs['gb_per_day'],
+        message_rate=inputs['messages_per_second'],
+        avg_message_size_kb=inputs['avg_message_size_kb'],
+        retention_days=inputs['retention_days'],
+        partitions=inputs['partitions'],
+        replication_factor=inputs['replication_factor'],
+        peak_avg_ratio=inputs['peak_to_avg_ratio'],
+        costs=costs,
+        storage_cost_per_gb_month=STORAGE_COST_PER_GB_MONTH,
+        throughput_cost_per_mbps_month=THROUGHPUT_COST_PER_MBPS_MONTH,
+        network_cost_per_gb_month=NETWORK_COST_PER_GB_MONTH,
+        partition_cost_per_partition_month=PARTITION_COST_PER_PARTITION_MONTH,
+        retention_overhead_pct=5
+    )
