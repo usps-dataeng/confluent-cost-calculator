@@ -96,6 +96,9 @@ if 'cku_config' not in st.session_state:
     st.session_state.cku_config = DEFAULT_CKU_CONFIG.copy()
 if 'flat_costs' not in st.session_state:
     st.session_state.flat_costs = DEFAULT_FLAT_COSTS.copy()
+# Ensure governance key exists (for backward compatibility with old sessions)
+if 'governance' not in st.session_state.flat_costs:
+    st.session_state.flat_costs['governance'] = DEFAULT_FLAT_COSTS['governance']
 if 'rom_config' not in st.session_state:
     st.session_state.rom_config = DEFAULT_ROM_CONFIG.copy()
 if 'show_rom_settings' not in st.session_state:
@@ -562,7 +565,7 @@ with col2:
     )
     st.metric(
         "Governance Annual",
-        f"${st.session_state.flat_costs['governance']:,}",
+        f"${st.session_state.flat_costs.get('governance', 42840):,}",
         help="Total annual governance cost (Azure + GCP)"
     )
 
@@ -599,7 +602,7 @@ def calculate_costs(size_config, selected_size, num_ingests=1, records_per_day=5
     network = st.session_state.flat_costs['network'] * partition_utilization
 
     # Governance scales with storage
-    governance = storage_ratio * st.session_state.flat_costs['governance'] * num_ingests
+    governance = storage_ratio * st.session_state.flat_costs.get('governance', 42840) * num_ingests
 
     # Scale storage based on data volume
     records_per_year = records_per_day * 365
@@ -844,7 +847,7 @@ with col2:
     st.markdown(f"""
         **🔒 Governance Cost:** ${costs['governance']:,.0f}
 
-        _{storage_ratio:.4f} × ${st.session_state.flat_costs['governance']:,.0f} × {num_ingests} ingests_
+        _{storage_ratio:.4f} × ${st.session_state.flat_costs.get('governance', 42840):,.0f} × {num_ingests} ingests_
     """)
 
     st.markdown(f"""
@@ -877,9 +880,9 @@ preview_rom_config['gcp_ckus'] = st.session_state.cku_config['gcp_ckus']
 preview_rom_config['gcp_rate'] = st.session_state.cku_config['gcp_rate']
 preview_rom_config['total_partitions'] = TOTAL_PARTITIONS
 preview_rom_config['total_storage_gb'] = TOTAL_STORAGE_GB
-preview_rom_config['storage_annual'] = st.session_state.flat_costs['storage']
-preview_rom_config['network_annual'] = st.session_state.flat_costs['network']
-preview_rom_config['governance_annual'] = st.session_state.flat_costs['governance']
+preview_rom_config['storage_annual'] = st.session_state.flat_costs.get('storage', 180000)
+preview_rom_config['network_annual'] = st.session_state.flat_costs.get('network', 120000)
+preview_rom_config['governance_annual'] = st.session_state.flat_costs.get('governance', 42840)
 
 rom_results = calculate_rom_costs(preview_rom_config)
 
@@ -1106,7 +1109,7 @@ with st.expander("📐 Formula Reference"):
     ```
     (Storage Needed / Total Storage) × Total Annual Governance Cost
 
-    Current: ${st.session_state.flat_costs['governance']:,}
+    Current: ${st.session_state.flat_costs.get('governance', 42840):,}
     ```
 
     **Notes:**
