@@ -183,20 +183,18 @@ with st.sidebar:
 
     st.divider()
 
-    # Settings toggles
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("👕 Sizes", use_container_width=True):
-            st.session_state.show_settings = not st.session_state.show_settings
-    with col2:
-        if st.button("💰 Cost", use_container_width=True):
-            st.session_state.show_cost_settings = not st.session_state.show_cost_settings
-    with col3:
-        if st.button("📊 ROM", use_container_width=True):
-            st.session_state.show_rom_settings = not st.session_state.show_rom_settings
-    with col4:
-        if st.button("⚡ Technical", use_container_width=True):
-            st.session_state.show_technical_model = not st.session_state.show_technical_model
+    # Settings toggles - vertical layout
+    if st.button("👕 Sizes", use_container_width=True):
+        st.session_state.show_settings = not st.session_state.show_settings
+
+    if st.button("💰 Cost", use_container_width=True):
+        st.session_state.show_cost_settings = not st.session_state.show_cost_settings
+
+    if st.button("📊 ROM", use_container_width=True):
+        st.session_state.show_rom_settings = not st.session_state.show_rom_settings
+
+    if st.button("⚡ Technical", use_container_width=True):
+        st.session_state.show_technical_model = not st.session_state.show_technical_model
 
 # Check if data is loaded
 if st.session_state.parsed_data is None:
