@@ -144,6 +144,23 @@ function App() {
     downloadCSV(csvContent, filename);
   };
 
+  const calculateTechnicalDefaultsFromROM = (): TechnicalModelInputs => {
+    const romCosts = calculateROMCosts(romConfig);
+    const totalPartitions = romCosts.totalPartitions;
+    const recordsPerDay = romCosts.recordsPerDay;
+
+    const messagesPerSecond = recordsPerDay / 86400;
+    const avgMessageSizeKB = 1;
+    const gbPerDay = (recordsPerDay * avgMessageSizeKB) / (1024 * 1024);
+
+    return {
+      ...DEFAULT_TECHNICAL_INPUTS,
+      partitions: Math.max(6, Math.ceil(totalPartitions)),
+      gbPerDay: Math.max(0.1, gbPerDay),
+      messagesPerSecond: Math.max(1, Math.round(messagesPerSecond)),
+    };
+  };
+
   const handleSaveTechnicalSettings = () => {
     setTechnicalInputs(editingTechnical);
     setShowTechnicalModel(false);
@@ -152,6 +169,12 @@ function App() {
   const handleResetTechnicalSettings = () => {
     setEditingTechnical(DEFAULT_TECHNICAL_INPUTS);
     setTechnicalInputs(DEFAULT_TECHNICAL_INPUTS);
+  };
+
+  const handleSyncFromROM = () => {
+    const synced = calculateTechnicalDefaultsFromROM();
+    setEditingTechnical(synced);
+    setTechnicalInputs(synced);
   };
 
   const handleExportTechnicalModel = () => {
@@ -908,6 +931,12 @@ function App() {
               <h3 className="text-xl font-semibold text-white">Technical Cost Model Configuration</h3>
               <div className="flex gap-3">
                 <button
+                  onClick={handleSyncFromROM}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm"
+                >
+                  Sync from ROM
+                </button>
+                <button
                   onClick={handleResetTechnicalSettings}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
                 >
@@ -919,6 +948,19 @@ function App() {
                 >
                   Save Changes
                 </button>
+              </div>
+            </div>
+
+            <div className="mb-4 p-4 bg-emerald-900/20 border border-emerald-800 rounded-lg">
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full mt-1.5"></div>
+                <div className="text-sm">
+                  <div className="text-emerald-300 font-semibold mb-1">ROM Integration Active</div>
+                  <div className="text-slate-400">
+                    Technical model can auto-sync from ROM: {romCosts.totalPartitions.toFixed(3)} partitions, {romCosts.recordsPerDay.toLocaleString()} records/day.
+                    Click "Sync from ROM" to populate these values.
+                  </div>
+                </div>
               </div>
             </div>
 
