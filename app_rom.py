@@ -665,24 +665,35 @@ with col2:
     )
 
 # Calculate costs function with actual formulas
-def calculate_costs(size_config, selected_size):
+def calculate_costs(size_config, selected_size, num_ingests=1, records_per_day=5000):
     # Calculate total CKU cost
     azure_annual = st.session_state.cku_config['azure_ckus'] * st.session_state.cku_config['azure_rate'] * 12
     gcp_annual = st.session_state.cku_config['gcp_ckus'] * st.session_state.cku_config['gcp_rate'] * 12
     total_cku_cost_annual = azure_annual + gcp_annual
 
-    # Prorate costs based on resource utilization
+    # Prorate costs based on resource utilization per ingest
     partition_ratio = size_config['partitions'] / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
     storage_ratio = size_config['storage_gb'] / TOTAL_STORAGE_GB if TOTAL_STORAGE_GB > 0 else 0
 
-    # Base costs prorated by usage
-    compute = partition_ratio * total_cku_cost_annual
-    storage = storage_ratio * st.session_state.flat_costs['storage']
+    # Base costs prorated by usage and scaled by number of ingests
+    compute = partition_ratio * total_cku_cost_annual * num_ingests
+    storage = storage_ratio * st.session_state.flat_costs['storage'] * num_ingests
 
-    # Network cost is flat: Network Annual × Network Multiplier (not prorated)
-    network = st.session_state.flat_costs['network'] * st.session_state.flat_costs['network_multiplier']
+    # Network cost scales with partition usage (not flat)
+    # Calculate total partitions across all ingests
+    total_partitions = size_config['partitions'] * num_ingests
+    TOTAL_NETWORK_PARTITIONS = 100.0  # Reference capacity
+    partition_utilization = total_partitions / TOTAL_NETWORK_PARTITIONS
+    network = st.session_state.flat_costs['network'] * partition_utilization
 
-    governance = storage_ratio * st.session_state.flat_costs['governance']
+    # Governance scales with storage
+    governance = storage_ratio * st.session_state.flat_costs['governance'] * num_ingests
+
+    # Scale storage based on data volume
+    records_per_year = records_per_day * 365
+    storage_gb_per_year = records_per_year / (1024 * 1024)
+    storage_multiplier = 1 + (storage_gb_per_year / 1000)
+    storage = storage * storage_multiplier
 
     total_yearly = compute + storage + network + governance
     total_monthly = total_yearly / 12
@@ -693,7 +704,9 @@ def calculate_costs(size_config, selected_size):
         'network': network,
         'governance': governance,
         'total_yearly': total_yearly,
-        'total_monthly': total_monthly
+        'total_monthly': total_monthly,
+        'partition_utilization': partition_utilization * 100,
+        'num_ingests': num_ingests
     }
 
 # T-shirt size selection
@@ -727,7 +740,9 @@ st.divider()
 
 # Get selected configuration and calculate costs
 size_config = st.session_state.tshirt_sizes[selected_size]
-costs = calculate_costs(size_config, selected_size)
+num_ingests = st.session_state.rom_config.get('num_ingests', 1)
+records_per_day = st.session_state.rom_config.get('records_per_day', 5000)
+costs = calculate_costs(size_config, selected_size, num_ingests, records_per_day)
 
 # Display total cost in col3 (delayed until costs are calculated)
 with col3:
@@ -763,9 +778,11 @@ with col1:
     """, unsafe_allow_html=True)
 
     st.info(f"""
-    **📈 Utilization Percentages:**
-    - Compute: {(size_config['partitions'] / TOTAL_PARTITIONS) * 100:.3f}%
-    - Storage: {(size_config['storage_gb'] / TOTAL_STORAGE_GB) * 100:.3f}%
+    **📈 Utilization & Scaling:**
+    - Compute: {(size_config['partitions'] / TOTAL_PARTITIONS) * 100:.3f}% per ingest × {num_ingests} ingests
+    - Storage: {(size_config['storage_gb'] / TOTAL_STORAGE_GB) * 100:.3f}% per ingest × {num_ingests} ingests
+    - Network: {costs['partition_utilization']:.2f}% utilization ({size_config['partitions'] * num_ingests:.2f} total partitions)
+    - Records: {records_per_day:,} per day
     """)
 
 with col2:
@@ -782,7 +799,7 @@ with col2:
     st.markdown(f"""
         **🖥️ Compute (CKU) Cost:** ${costs['compute']:,.0f}
 
-        _{partition_ratio:.4f} × ${total_cku_annual:,.0f}_
+        _{partition_ratio:.4f} × ${total_cku_annual:,.0f} × {num_ingests} ingests_
 
         _({st.session_state.cku_config['azure_ckus']} Azure CKUs + {st.session_state.cku_config['gcp_ckus']} GCP CKUs)_
     """)
@@ -790,19 +807,19 @@ with col2:
     st.markdown(f"""
         **💾 Storage Cost:** ${costs['storage']:,.0f}
 
-        _{storage_ratio:.4f} × ${st.session_state.flat_costs['storage']:,.0f}_
+        _{storage_ratio:.4f} × ${st.session_state.flat_costs['storage']:,.0f} × {num_ingests} ingests × volume_
     """)
 
     st.markdown(f"""
         **🌐 Network Cost:** ${costs['network']:,.0f}
 
-        _{st.session_state.flat_costs['network_multiplier']} × ${st.session_state.flat_costs['network']:,.0f}_
+        _{costs['partition_utilization']:.2f}% × ${st.session_state.flat_costs['network']:,.0f}_
     """)
 
     st.markdown(f"""
         **🔒 Governance Cost:** ${costs['governance']:,.0f}
 
-        _{storage_ratio:.4f} × ${st.session_state.flat_costs['governance']:,.0f}_
+        _{storage_ratio:.4f} × ${st.session_state.flat_costs['governance']:,.0f} × {num_ingests} ingests_
     """)
 
     st.markdown(f"""
@@ -828,6 +845,17 @@ preview_rom_config['feed_configs'] = [
     for _ in range(st.session_state.rom_config.get('num_ingests', 1))
 ]
 
+# Add CKU and flat cost configuration for accurate pricing
+preview_rom_config['azure_ckus'] = st.session_state.cku_config['azure_ckus']
+preview_rom_config['azure_rate'] = st.session_state.cku_config['azure_rate']
+preview_rom_config['gcp_ckus'] = st.session_state.cku_config['gcp_ckus']
+preview_rom_config['gcp_rate'] = st.session_state.cku_config['gcp_rate']
+preview_rom_config['total_partitions'] = TOTAL_PARTITIONS
+preview_rom_config['total_storage_gb'] = TOTAL_STORAGE_GB
+preview_rom_config['storage_annual'] = st.session_state.flat_costs['storage']
+preview_rom_config['network_annual'] = st.session_state.flat_costs['network']
+preview_rom_config['governance_annual'] = st.session_state.flat_costs['governance']
+
 rom_results = calculate_rom_costs(preview_rom_config)
 
 rom_col1, rom_col2, rom_col3 = st.columns(3)
@@ -851,9 +879,10 @@ with rom_col2:
             <h2>${rom_results['breakdown']['first_year_cloud_cost']:,.0f}</h2>
             <hr style="border-color: #ddd; margin: 0.5rem 0;">
             <p style="font-size: 0.85rem; margin: 0;">
-                Confluent: ${rom_results['breakdown']['confluent_cost']:,.0f}<br>
-                GCP: ${rom_results['breakdown']['gcp_cost']:,.0f}<br>
-                Network: ${rom_results['breakdown']['network_cost']:,.0f}
+                Compute: ${rom_results['breakdown']['confluent_cost']:,.0f}<br>
+                Storage: ${rom_results['breakdown']['gcp_cost']:,.0f}<br>
+                Network: ${rom_results['breakdown']['network_cost']:,.0f}<br>
+                Governance: ${rom_results['breakdown']['governance_cost']:,.0f}
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -871,9 +900,11 @@ with rom_col3:
     """, unsafe_allow_html=True)
 
 st.info(f"""
-**ROM Configuration:** {rom_results['total_feeds']} ingest(s) | {rom_results['records_per_day']:,} records/day | {size_config['partitions']} total partitions (T-shirt size: {selected_size})
+**ROM Configuration:** {rom_results['total_feeds']} ingest(s) | {rom_results['records_per_day']:,} records/day | {size_config['partitions']:.2f} partitions per ingest (T-shirt size: {selected_size})
 
-Cost scales with: Number of topics ({rom_results['total_inbound_feeds']} in + {rom_results['total_outbound_feeds']} out), partition usage ({rom_results['partition_utilization_pct']:.2f}%), and daily volume ({rom_results['records_per_day']:,} records)
+**Pricing Method:** CKU-based (actual infrastructure costs)
+
+**Cost scales with:** Number of ingests ({rom_results['total_feeds']}), T-shirt size selection ({selected_size}), partition usage ({rom_results['partition_utilization_pct']:.2f}%), and daily volume ({rom_results['records_per_day']:,} records)
 """)
 
 # Technical Cost Model Analysis

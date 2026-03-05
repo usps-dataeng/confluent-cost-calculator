@@ -34,33 +34,51 @@ def calculate_rom_costs(config):
 
     one_time_development = inbound_cost + outbound_cost + normalization_cost + workspace_setup
 
-    # Cloud costs - convert monthly costs to annual by multiplying by 12
-    # Base costs from config
-    base_confluent_annual = config.get('confluent_monthly_cost', config.get('confluent_annual_cost', 976)) * 12
-    base_gcp_annual = config.get('gcp_per_feed_monthly_cost', config.get('gcp_per_feed_annual_cost', 773)) * 12
+    # USE CKU-BASED PRICING (matching top dashboard)
+    # Get CKU configuration from config
+    azure_ckus = config.get('azure_ckus', 14)
+    azure_rate = config.get('azure_rate', 1925)
+    gcp_ckus = config.get('gcp_ckus', 28)
+    gcp_rate = config.get('gcp_rate', 1585)
 
-    # Network capacity: Reference shows 100 total partitions across all sources
-    # Partition ratio determines resource utilization
+    # Get total resources
+    TOTAL_PARTITIONS = config.get('total_partitions', 12034)
+    TOTAL_STORAGE_GB = config.get('total_storage_gb', 30844.17)
+
+    # Get flat costs
+    storage_annual = config.get('storage_annual', 180000)
+    network_annual = config.get('network_annual', 120000)
+    governance_annual = config.get('governance_annual', 42840)
+
+    # Calculate CKU costs
+    azure_annual = azure_ckus * azure_rate * 12
+    gcp_annual = gcp_ckus * gcp_rate * 12
+    total_cku_cost_annual = azure_annual + gcp_annual
+
+    # Calculate partition ratio (per ingest, then multiply by num_ingests)
+    # total_partitions is the sum across all ingests, so divide by num_ingests to get per-ingest
+    partitions_per_ingest = total_partitions / num_ingests if num_ingests > 0 else total_partitions
+    partition_ratio = partitions_per_ingest / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
+    storage_ratio = (total_partitions / num_ingests) / TOTAL_PARTITIONS if (TOTAL_PARTITIONS > 0 and num_ingests > 0) else 0
+
+    # Scale by number of ingests
+    confluent_cost = partition_ratio * total_cku_cost_annual * num_ingests
+
+    # Storage scales with ingests and data volume
+    records_per_year = records_per_day * 365
+    storage_gb_per_year = records_per_year / (1024 * 1024)
+    storage_multiplier = 1 + (storage_gb_per_year / 1000)
+    gcp_cost = storage_ratio * storage_annual * num_ingests * storage_multiplier
+
+    # Network costs scale with total partition utilization
     TOTAL_NETWORK_PARTITIONS = 100.0
     partition_utilization = total_partitions / TOTAL_NETWORK_PARTITIONS
+    network_cost = network_annual * partition_utilization
 
-    # Confluent cost scales with partitions (more partitions = more throughput)
-    confluent_cost = base_confluent_annual * total_feeds * (1 + partition_utilization)
+    # Governance scales with storage
+    governance_cost = storage_ratio * governance_annual * num_ingests
 
-    # GCP cost scales with both feeds and partitions
-    # Storage scales with records per day (rough estimate: 1KB per record)
-    records_per_year = records_per_day * 365
-    storage_gb_per_year = records_per_year / (1024 * 1024)  # Convert to GB
-    storage_multiplier = 1 + (storage_gb_per_year / 1000)  # Scale factor
-
-    gcp_cost = base_gcp_annual * total_feeds * storage_multiplier
-
-    # Network costs based on partition usage
-    # Base network cost (from existing flat costs in app)
-    base_network_annual = 120000  # $10k/month baseline
-    network_cost = base_network_annual * partition_utilization
-
-    first_year_cloud_cost = confluent_cost + gcp_cost + network_cost
+    first_year_cloud_cost = confluent_cost + gcp_cost + network_cost + governance_cost
 
     initial_investment = [{
         'year': config['start_year'],
@@ -106,6 +124,7 @@ def calculate_rom_costs(config):
             'confluent_cost': confluent_cost,
             'gcp_cost': gcp_cost,
             'network_cost': network_cost,
+            'governance_cost': governance_cost,
             'one_time_development': one_time_development,
             'cloud_infrastructure_7year': cloud_infrastructure_7year,
             'operating_variance_6year': operating_variance_6year,
