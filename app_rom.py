@@ -502,16 +502,18 @@ if st.session_state.show_rom_settings:
 
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.rom_config['escalation_rate'] = st.number_input(
-            "Escalation Rate",
-            value=st.session_state.rom_config['escalation_rate'],
+        # Display escalation rate as percentage for consistency with Annual Increase Rate
+        escalation_pct = st.number_input(
+            "Escalation Rate (%)",
+            value=st.session_state.rom_config['escalation_rate'] * 100,
             min_value=0.0,
-            max_value=1.0,
-            step=0.001,
-            format="%.3f",
+            max_value=100.0,
+            step=0.1,
+            format="%.1f",
             key="escalation_rate_input",
-            help="Annual cost increase rate (e.g., 0.034 = 3.4%)"
+            help="Annual cost increase rate (synced with Annual Increase Rate)"
         )
+        st.session_state.rom_config['escalation_rate'] = escalation_pct / 100
     with col2:
         st.session_state.rom_config['start_year'] = st.number_input(
             "Start Year",
@@ -569,15 +571,25 @@ with col2:
         help="Total annual governance cost (Azure + GCP)"
     )
 
+    # Initialize annual_increase_rate from rom_config escalation_rate if not in sync
+    if 'escalation_rate' in st.session_state.rom_config:
+        default_value = st.session_state.rom_config['escalation_rate'] * 100
+    else:
+        default_value = 3.4
+
     annual_increase_rate = st.number_input(
         "Annual Increase Rate (%)",
-        value=3.0,
+        value=default_value,
         min_value=0.0,
         max_value=100.0,
         step=0.1,
         format="%.1f",
-        help="Used for 7-year cost projection"
+        help="Used for 7-year cost projection (synced with ROM Escalation Rate)",
+        key="annual_increase_rate_input"
     )
+
+    # Sync the value to rom_config escalation_rate
+    st.session_state.rom_config['escalation_rate'] = annual_increase_rate / 100
 
 # Calculate costs function with actual formulas
 def calculate_costs(size_config, selected_size, num_ingests=1, records_per_day=5000):
