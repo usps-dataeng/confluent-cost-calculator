@@ -502,9 +502,9 @@ if st.session_state.show_rom_settings:
         st.session_state.rom_config['gcp_per_feed_monthly_cost'] = monthly_gcp
         st.caption(f"Annual: ${monthly_gcp * 12:,.0f}")
 
+    # Escalation Rate and Start Year
     col1, col2 = st.columns(2)
     with col1:
-        # Display escalation rate as percentage for consistency with Annual Increase Rate
         st.session_state.sync_rate = st.number_input(
             "Escalation Rate (%)",
             value=st.session_state.sync_rate,
@@ -1152,3 +1152,4 @@ with st.expander("📐 Formula Reference"):
 # Footer
 st.divider()
 st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
