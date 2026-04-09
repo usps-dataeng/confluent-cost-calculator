@@ -526,6 +526,8 @@ if st.session_state.show_rom_settings:
             key="start_year_input"
         )
 
+
+
     st.divider()
 
     # Reset button
@@ -1152,4 +1154,3 @@ with st.expander("📐 Formula Reference"):
 # Footer
 st.divider()
 st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
