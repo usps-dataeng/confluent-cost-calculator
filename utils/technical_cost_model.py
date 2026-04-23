@@ -84,6 +84,13 @@ def generate_technical_model_csv(inputs: Dict[str, Any], costs: Dict[str, Any]) 
     lines.append(f"Partitions,{inputs['partitions']},count,Topic partition count for parallelism")
     lines.append(f"Replication Factor,{inputs['replication_factor']},replicas,Data redundancy multiplier")
     lines.append(f"Peak to Average Ratio,{inputs['peak_to_avg_ratio']},x,Traffic spike multiplier")
+    _ni = inputs.get('num_ingests', 0)
+    _rpd = inputs.get('records_per_day', 0)
+    if _ni > 0 or _rpd > 0:
+        lines.append(f"Number of Ingests,{_ni},feeds,Total number of ingest feed pipelines")
+        lines.append(f"Records per Day,{int(_rpd):,},records/day,Total daily record volume across all feeds")
+        lines.append(f"Confluent Cost per Feed,{inputs.get('confluent_cost_per_feed', 976)},$/feed/month,Monthly Confluent Cloud cost per feed")
+        lines.append(f"GCP Cost per Feed,{inputs.get('gcp_cost_per_feed', 773)},$/feed/month,Monthly GCP infrastructure cost per feed")
     lines.append('')
 
     lines.append('CALCULATED METRICS')
@@ -101,6 +108,12 @@ def generate_technical_model_csv(inputs: Dict[str, Any], costs: Dict[str, Any]) 
     lines.append(f"Network,{format_in_thousands(costs['network_cost_annual'])},{format_in_thousands(costs['network_cost_annual'] / 12)},{(inputs['gb_per_day'] * 30):,} GB/month,{format_in_thousands(NETWORK_COST_PER_GB_MONTH * 12)}/GB/year")
     lines.append(f"Partitions,{format_in_thousands(costs['partition_cost_annual'])},{format_in_thousands(costs['partition_cost_annual'] / 12)},{inputs['partitions']} partitions,{format_in_thousands(PARTITION_COST_PER_PARTITION_MONTH * 12)}/partition/year")
     lines.append(f"Retention,{format_in_thousands(costs['retention_cost_annual'])},{format_in_thousands(costs['retention_cost_annual'] / 12)},Additional 5% for retention overhead,")
+    if 'confluent_cost_annual' in costs:
+        _ni2 = inputs.get('num_ingests', 0)
+        _crate = inputs.get('confluent_cost_per_feed', 976)
+        _grate = inputs.get('gcp_cost_per_feed', 773)
+        lines.append(f"Confluent Feeds,{format_in_thousands(costs['confluent_cost_annual'])},{format_in_thousands(costs['confluent_cost_annual'] / 12)},{_ni2} feed(s) × {format_in_thousands(_crate)}/feed/month,{format_in_thousands(_crate * 12)}/feed/year")
+        lines.append(f"GCP Feeds,{format_in_thousands(costs['gcp_cost_annual'])},{format_in_thousands(costs['gcp_cost_annual'] / 12)},{_ni2} feed(s) × {format_in_thousands(_grate)}/feed/month,{format_in_thousands(_grate * 12)}/feed/year")
     lines.append('')
 
     if 'confluent_cost_annual' in costs and 'gcp_cost_annual' in costs:
@@ -205,5 +218,9 @@ def generate_technical_model_excel(inputs: Dict[str, Any], costs: Dict[str, Any]
         throughput_cost_per_mbps_month=THROUGHPUT_COST_PER_MBPS_MONTH,
         network_cost_per_gb_month=NETWORK_COST_PER_GB_MONTH,
         partition_cost_per_partition_month=PARTITION_COST_PER_PARTITION_MONTH,
-        retention_overhead_pct=5
+        retention_overhead_pct=5,
+        num_ingests=inputs.get('num_ingests', 0),
+        records_per_day=inputs.get('records_per_day', 0),
+        confluent_cost_per_feed=inputs.get('confluent_cost_per_feed', 976),
+        gcp_cost_per_feed=inputs.get('gcp_cost_per_feed', 773),
     )
