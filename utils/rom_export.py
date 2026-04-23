@@ -50,42 +50,22 @@ def calculate_rom_costs(config):
     network_annual = config.get('network_annual', 120000)
     governance_annual = config.get('governance_annual', 42840)
 
-    # Calculate CKU costs
-    azure_annual = azure_ckus * azure_rate * 12
-    gcp_annual = gcp_ckus * gcp_rate * 12
-    total_cku_cost_annual = azure_annual + gcp_annual
+    # Confluent cost: flat per-feed contract price ($976/month per ingest)
+    confluent_monthly_per_feed = config.get('confluent_monthly_cost', 976)
+    confluent_cost = confluent_monthly_per_feed * 12 * num_ingests
 
-    # HYBRID MODEL: Base cost per ingest (30%) + Variable cost by partition ratio (70%)
-    partitions_per_ingest = total_partitions / num_ingests if num_ingests > 0 else total_partitions
-    partition_ratio = partitions_per_ingest / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
-    storage_ratio = (total_partitions / num_ingests) / TOTAL_PARTITIONS if (TOTAL_PARTITIONS > 0 and num_ingests > 0) else 0
+    # GCP cost: flat per-feed contract price ($773/month per ingest)
+    gcp_monthly_per_feed = config.get('gcp_per_feed_monthly_cost', 773)
+    gcp_cost = gcp_monthly_per_feed * 12 * num_ingests
 
-    # Confluent cost: 30% base per ingest + 70% variable by partition usage
-    base_cost_per_ingest = total_cku_cost_annual * 0.30 / 100  # Assume 100 typical ingests
-    variable_cost = partition_ratio * total_cku_cost_annual * 0.70
-    confluent_cost = (base_cost_per_ingest * num_ingests) + (variable_cost * num_ingests)
-
-    # Storage scales with ingests and data volume
-    records_per_year = records_per_day * 365
-    storage_gb_per_year = records_per_year / (1024 * 1024)
-    storage_multiplier = 1 + (storage_gb_per_year / 1000)
-
-    # GCP cost: 40% base per ingest + 60% variable by storage ratio
-    base_storage_per_ingest = storage_annual * 0.40 / 100
-    variable_storage = storage_ratio * storage_annual * 0.60
-    gcp_cost = (base_storage_per_ingest * num_ingests + variable_storage * num_ingests) * storage_multiplier
-
-    # Network costs scale with total partition utilization
-    # Use actual total partitions as reference capacity
+    # Network cost: scales with actual partition share of the total network
     partition_utilization = total_partitions / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
-    # Cap at 100% utilization (treat as flat cost once capacity is reached)
     partition_utilization = min(partition_utilization, 1.0)
     network_cost = network_annual * partition_utilization
 
-    # Governance: 40% base per ingest + 60% variable by storage ratio
-    base_governance_per_ingest = governance_annual * 0.40 / 100
-    variable_governance = storage_ratio * governance_annual * 0.60
-    governance_cost = (base_governance_per_ingest * num_ingests) + (variable_governance * num_ingests)
+    # Governance cost: scales with partition share (usage-based)
+    governance_cost = governance_annual * partition_utilization
+
 
     first_year_cloud_cost = confluent_cost + gcp_cost + network_cost + governance_cost
 
