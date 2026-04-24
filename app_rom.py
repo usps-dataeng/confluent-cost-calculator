@@ -4,7 +4,6 @@ from datetime import datetime
 from utils.csv_parser import parse_csv_file, parse_databricks_table
 from utils.export_data import generate_cost_projection_csv, generate_cost_projection_excel
 from utils.rom_export import (
-    calculate_rom_costs,
     generate_rom_export,
     generate_rom_export_excel,
     generate_rom_export_excel_de_only,
@@ -57,7 +56,7 @@ DEFAULT_ROM_CONFIG = {
     'project_name': '',
     'inbound_feeds': 1,
     'outbound_feeds': 1,
-    'de_hourly_rate': 155,
+    'de_hourly_rate': 80,
     'inbound_hours': 296,
     'outbound_hours': 254,
     'normalization_hours': 27.9,
@@ -147,213 +146,21 @@ st.markdown("""
 st.markdown('<div class="main-header">🧮 Confluent Cloud Cost Calculator</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">T-Shirt Sizing ROM (Rough Order of Magnitude)</div>', unsafe_allow_html=True)
 
-# How to Use Guide
-with st.expander("📖 How to Use This Calculator", expanded=False):
-    st.markdown("""
-    ## Getting Started
+# Auto-load bundled topic list on first run
+if st.session_state.parsed_data is None:
+    import os
+    _csv_path = os.path.join(os.path.dirname(__file__), 'src', 'assets', 'Topic_list.csv')
+    if not os.path.exists(_csv_path):
+        _csv_path = os.path.join(os.path.dirname(__file__), 'Topic_list.csv')
+    try:
+        with open(_csv_path, 'r') as _f:
+            st.session_state.parsed_data = parse_csv_file(_f)
+    except Exception:
+        pass
 
-    This calculator produces two types of estimates for a Confluent Cloud data engineering project:
-
-    1. **ROM (Rough Order of Magnitude)** — A top-down estimate built from T-shirt sizes and per-feed rates. Use this for initial pricing conversations and TSLC submissions.
-    2. **Technical Model** — A bottom-up infrastructure cost estimate driven by raw throughput metrics (GB/day, records/day, message rate). Use this to validate T-shirt size selections or present detailed technical justification.
-
-    Follow the steps below in order. Most fields have sensible defaults — only change what is relevant to your project.
-
-    ---
-
-    ### Step 1 — Load Your Topic Data (Sidebar)
-
-    The calculator needs a topic list to determine partition counts and storage.
-
-    - **Databricks Table** (default): Enter the fully qualified table name and click "Load from Table."
-    - **Upload CSV**: Upload a topic list CSV exported from Confluent or another tool.
-
-    The CSV must have:
-    - Column 0: Topic Name
-    - Column 2: Number of Partitions
-    - Column 5: Storage (with units — TB, GB, MB, KB, or B)
-
-    Once loaded, the **Total Partitions** and **Total Storage** figures at the top of the page will populate.
-
-    ---
-
-    ### Step 2 — Open ROM Settings (Sidebar → 📊 ROM)
-
-    Click **ROM** in the sidebar. This is where you configure the engagement details.
-
-    #### Project Basics
-    | Field | What It Means | Guidance |
-    |---|---|---|
-    | **Project Name** | Appears in Excel export headers | Enter the client or project name |
-    | **Records per Day** | Daily records per ingest feed | Use the client's actual per-feed daily volume |
-    | **Number of Ingests** | How many separate ingest feed pipelines | One feed = one inbound + outbound topic pair |
-    | **DE Hourly Rate** | Blended Data Engineering hourly rate | **Default $155/hr — do not lower without approval.** |
-
-    #### Engineering Hours (per feed)
-    | Field | Default | What It Covers |
-    |---|---|---|
-    | Inbound Hours | 296 | Time to build one inbound ingest pipeline |
-    | Outbound Hours | 254 | Time to build one outbound data asset |
-    | Normalization Hours | 27.9 | Shared normalization work per feed |
-
-    Change these only if you have a specific SOW or delivery scope that differs from the standard pattern.
-
-    #### Cloud Costs (per feed, per month)
-    | Field | Default | Notes |
-    |---|---|---|
-    | Workspace Setup Cost | — | One-time environment provisioning |
-    | Confluent Monthly Cost | $976 | Per-feed Confluent Cloud recurring cost |
-    | GCP Per Feed Monthly | $773 | Per-feed GCP infrastructure cost |
-    | Escalation Rate | 0.034 (3.4%) | Applied to cloud costs in years 2–7. Synced with Cost Config panel. |
-
-    ---
-
-    ### Step 3 — Select a T-Shirt Size
-
-    T-shirt sizes define the Kafka partition count and storage footprint per feed.
-
-    | Size | Partitions | Storage |
-    |---|---|---|
-    | Small | 6 | 15 GB |
-    | Medium | 24 | 100 GB |
-    | Large | 50 | 250 GB |
-    | X-Large | 100 | 1,000 GB |
-    | XX-Large | 197 | 2,500 GB |
-
-    If unsure, **Medium** is a reasonable default for standard integrations. The T-shirt size applies uniformly across all feeds.
-
-    ---
-
-    ### Step 4 — Review the ROM Summary
-
-    The ROM Summary shows three headline numbers:
-    - **One-Time Engineering**: Total labor cost (number of ingests × hours per feed × DE rate)
-    - **First Year Cloud**: Year-one infrastructure cost (Confluent + GCP + Network + Governance)
-    - **7-Year Total**: Combined project cost over the full projection including annual escalation
-
-    ---
-
-    ### Step 5 — Technical Cost Model (Optional — Sidebar → ⚡ Technical)
-
-    The Technical Model is a bottom-up cross-check. Click **⚡ Technical** in the sidebar to open it.
-
-    #### Recommended workflow:
-    1. Complete your ROM settings first (Steps 1–4 above).
-    2. Click **Sync from ROM** inside the Technical Model panel. This automatically populates:
-       - GB per Day (derived from records/day × avg message size)
-       - Messages per Second (derived from total records/day ÷ 86,400)
-       - Partitions (T-shirt size × number of ingests)
-       - Number of Ingests and Records per Day (carried over directly)
-       - Confluent and GCP per-feed costs (pulled from ROM settings)
-    3. Review or adjust the individual fields if needed.
-
-    #### Technical Model Fields
-    | Section | Field | What to Enter |
-    |---|---|---|
-    | Data Volume | GB per Day | Total daily data volume across all feeds |
-    | Data Volume | Messages per Second | Derived from records/day — or enter directly |
-    | Data Volume | Avg Message Size (KB) | Per-record payload size in KB |
-    | Feed Scaling | Records per Day (Total) | Total records/day across all feeds (auto-filled on sync) |
-    | Feed Scaling | Number of Ingests | Total feed count (auto-filled on sync) |
-    | Configuration | Retention Days | How long data is retained in Kafka |
-    | Configuration | Partitions | Total partition count across all feeds |
-    | Configuration | Replication Factor | Usually 3 for production |
-    | Per-Feed Costs | Confluent $/Feed/Month | Auto-filled from ROM — edit if needed |
-    | Per-Feed Costs | GCP $/Feed/Month | Auto-filled from ROM — edit if needed |
-    | Performance | Peak to Average Ratio | Traffic spike multiplier (default 2.5) |
-
-    #### What the Technical Model calculates:
-    - **Calculated Storage**: GB/day × Retention Days × Replication Factor
-    - **Peak Throughput**: (records/day × avg message size) ÷ 86,400 × peak ratio
-    - **Cost Preview**: Storage + Throughput + Network + Partitions + (Confluent per feed × ingests) + (GCP per feed × ingests)
-
-    When **Number of Ingests > 0**, the Cost Preview expands to show Confluent and GCP annual cost columns alongside the infrastructure costs.
-
-    ---
-
-    ### Step 6 — Export Reports
-
-    Click **Export Reports** to download Excel files.
-
-    #### ROM Exports
-    | Export | When to Use |
-    |---|---|
-    | **DE TSLC** | Data Engineering labor costs formatted for TSLC submission |
-    | **Cloud Only** | Infrastructure costs only — for deals where DE is handled separately |
-    | **Complete** | Full ROM combining DE labor + cloud costs |
-
-    #### Technical Model Export
-    Available when the Technical Model panel is open. Downloads an Excel workbook with:
-    - **Input Parameters** sheet — all inputs including feed count, records/day, and per-feed rates
-    - **Cost Breakdown** sheet — annual and monthly costs with per-feed Confluent and GCP rows when applicable
-    - **Calculated Metrics**, **Methodology**, **Pricing**, **Optimization**, and **Assumptions** sheets
-
-    ---
-
-    ### Advanced: Cost Configuration (Sidebar → 💰 Cost)
-
-    Only change these if you have updated billing data:
-    - **CKU Configuration**: Azure and GCP Confluent Kafka Units and their monthly rates
-    - **Flat Annual Costs**: Storage, network, and governance costs shared across all feeds
-    - **Network Multiplier**: Scales the network cost allocation (default 0.75)
-
-    ---
-
-    ### Common Questions
-
-    **Why is the DE rate $155 and not $80?**
-    The $155/hr rate is the standard blended rate for TSLC-eligible Data Engineering engagements. The $80 rate applies to a different billing context and should not be used for standard ROM estimates without specific direction.
-
-    **What if my project has multiple feeds of different sizes?**
-    The calculator applies one T-shirt size uniformly across all ingests. If feeds vary significantly, run separate estimates per size tier and combine the totals manually.
-
-    **The escalation rate shows in two places — which one do I use?**
-    Either — they are the same value. "Annual Increase Rate (%)" in the Cost Configuration panel and "Escalation Rate" in ROM Settings both control the same number.
-
-    **When should I use the Technical Model vs the ROM?**
-    Use the ROM for initial client conversations, TSLC submissions, and deal sizing. Use the Technical Model when you need to show detailed infrastructure justification, validate a T-shirt size, or when a client asks how the number was derived.
-
-    **The Sync from ROM button didn't update the fields — why?**
-    Complete your ROM settings (records/day, number of ingests, T-shirt size) before clicking Sync. The sync reads from whatever is currently saved in the ROM panel.
-    """)
-
-# Sidebar for file upload and settings
+# Sidebar for settings
 with st.sidebar:
     st.header("⚙️ Configuration")
-
-    # Data Source Selection
-    data_source = st.radio(
-        "Data Source",
-        ["Databricks Table", "Upload CSV"],
-        help="Choose to read from Databricks table or upload CSV"
-    )
-
-    if data_source == "Databricks Table":
-        table_name = st.text_input(
-            "Table Name",
-            value="edlprod_users.casey_y_smith.topic_list",
-            help="Fully qualified table name"
-        )
-        if st.button("📊 Load from Table", use_container_width=True):
-            try:
-                st.session_state.parsed_data = parse_databricks_table(table_name)
-                st.success(f"✅ Loaded from {table_name}")
-            except Exception as e:
-                st.error(f"❌ Error loading table: {str(e)}")
-    else:
-        # File upload
-        uploaded_file = st.file_uploader("📤 Upload Topic List CSV", type=['csv'])
-        if uploaded_file is not None:
-            st.session_state.parsed_data = parse_csv_file(uploaded_file)
-            st.success("File uploaded successfully!")
-
-    # Load default data if no file uploaded
-    if st.session_state.parsed_data is None:
-        try:
-            with open('Topic_list.csv', 'r') as f:
-                st.session_state.parsed_data = parse_csv_file(f)
-        except:
-            st.info("💡 Please load data from Databricks table or upload a CSV file.")
 
     st.divider()
 
@@ -370,15 +177,32 @@ with st.sidebar:
     if st.button("⚡ Technical", use_container_width=True):
         st.session_state.show_technical_model = not st.session_state.show_technical_model
 
-# Check if data is loaded
+    # Hidden data reload panel — not labeled to avoid drawing attention
+    st.sidebar.markdown("<div style='margin-top:2rem'></div>", unsafe_allow_html=True)
+    with st.sidebar.expander("···"):
+        data_source = st.radio(
+            "Source",
+            ["CSV File", "Databricks Table"],
+            label_visibility="collapsed"
+        )
+        if data_source == "Databricks Table":
+            table_name = st.text_input(
+                "Table Name",
+                value="edlprod_users.casey_y_smith.topic_list"
+            )
+            if st.button("Load from Table", use_container_width=True):
+                try:
+                    st.session_state.parsed_data = parse_databricks_table(table_name)
+                    st.success(f"Loaded from {table_name}")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+        else:
+            uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
+            if uploaded_file is not None:
+                st.session_state.parsed_data = parse_csv_file(uploaded_file)
+                st.success("Loaded.")
+
 if st.session_state.parsed_data is None:
-    st.error("❌ Please upload a Topic List CSV file to begin.")
-    st.info("""
-    **Expected CSV Format:**
-    - Column 0: Topic Name
-    - Column 2: Number of Partitions
-    - Column 5: Storage (with units: TB, GB, MB, KB, or B)
-    """)
     st.stop()
 
 parsed_data = st.session_state.parsed_data
@@ -702,63 +526,7 @@ if st.session_state.show_rom_settings:
 
     st.divider()
 
-# T-shirt size selection (must come before summary so ROM calc can use it)
-st.markdown("## 👕 Select T-Shirt Size")
-size_cols = st.columns(5)
-
-selected_size = st.radio(
-    "Choose Size",
-    options=list(st.session_state.tshirt_sizes.keys()),
-    index=1,  # Default to Medium
-    horizontal=True,
-    label_visibility="collapsed"
-)
-
-# Display size cards
-for idx, (size_name, config) in enumerate(st.session_state.tshirt_sizes.items()):
-    with size_cols[idx]:
-        is_selected = (size_name == selected_size)
-        if is_selected:
-            st.markdown(f"**🔹 {size_name}**")
-        else:
-            st.markdown(f"{size_name}")
-
-        inbound_partitions = config['partitions'] // 2
-        outbound_partitions = config['partitions'] - inbound_partitions
-        st.caption(f"{config['partitions']} partitions ({inbound_partitions} in / {outbound_partitions} out)")
-        st.caption(f"{config['storage_gb']} GB")
-
-st.divider()
-
-# Resolve selected config and ROM parameters
-size_config = st.session_state.tshirt_sizes[selected_size]
-num_ingests = st.session_state.rom_config.get('num_ingests', 1)
-records_per_day = st.session_state.rom_config.get('records_per_day', 5000)
-
-# Pre-calculate ROM results so the summary header can reference them
-
-_preview_rom_config = st.session_state.rom_config.copy()
-_preview_rom_config['feed_configs'] = [
-    {
-        'inbound': st.session_state.rom_config.get('inbound_feeds', 1),
-        'outbound': st.session_state.rom_config.get('outbound_feeds', 1),
-        'partitions': size_config['partitions']
-    }
-    for _ in range(num_ingests)
-]
-_preview_rom_config['azure_ckus'] = st.session_state.cku_config['azure_ckus']
-_preview_rom_config['azure_rate'] = st.session_state.cku_config['azure_rate']
-_preview_rom_config['gcp_ckus'] = st.session_state.cku_config['gcp_ckus']
-_preview_rom_config['gcp_rate'] = st.session_state.cku_config['gcp_rate']
-_preview_rom_config['total_partitions'] = TOTAL_PARTITIONS
-_preview_rom_config['total_storage_gb'] = TOTAL_STORAGE_GB
-_preview_rom_config['storage_annual'] = st.session_state.flat_costs.get('storage', 180000)
-_preview_rom_config['network_annual'] = st.session_state.flat_costs.get('network', 120000)
-_preview_rom_config['governance_annual'] = st.session_state.flat_costs.get('governance', 42840)
-
-_rom_preview = calculate_rom_costs(_preview_rom_config)
-
-# Main summary header
+# Main content
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -770,6 +538,7 @@ with col1:
 with col2:
     st.markdown("### 💰 Cost Configuration")
 
+    # Calculate total CKU costs
     azure_annual = st.session_state.cku_config['azure_ckus'] * st.session_state.cku_config['azure_rate'] * 12
     gcp_annual = st.session_state.cku_config['gcp_ckus'] * st.session_state.cku_config['gcp_rate'] * 12
     total_cku_cost_annual = azure_annual + gcp_annual
@@ -795,37 +564,105 @@ with col2:
         help="Total annual governance cost (Azure + GCP)"
     )
 
-    escalation_pct = st.session_state.rom_config['escalation_rate'] * 100
-    new_pct = st.number_input(
+    annual_increase_rate = st.number_input(
         "Annual Increase Rate (%)",
-        value=float(round(escalation_pct, 1)),
+        value=3.0,
         min_value=0.0,
         max_value=100.0,
         step=0.1,
         format="%.1f",
-        help="Annual cost escalation rate — synced with ROM Escalation Rate"
+        help="Used for 7-year cost projection"
     )
-    st.session_state.rom_config['escalation_rate'] = new_pct / 100
 
-with col3:
-    st.markdown("### 📊 ROM Cost Preview")
-    first_year_cloud = _rom_preview['breakdown']['first_year_cloud_cost']
-    first_year_monthly = first_year_cloud / 12
-    total_7yr = _rom_preview['breakdown']['total_project_cost']
-    one_time_eng = _rom_preview['breakdown']['one_time_development']
-    st.markdown(f"""
-        <div class="cost-card">
-            <h4 style="margin:0; color:white;">First Year Cloud (Monthly)</h4>
-            <h2 style="margin:0.5rem 0; color:white;">${first_year_monthly:,.0f}</h2>
-            <hr style="border-color: rgba(255,255,255,0.3);">
-            <h4 style="margin:0; color:white;">First Year Cloud (Annual)</h4>
-            <h3 style="margin:0.5rem 0; color:white;">${first_year_cloud:,.0f}</h3>
-            <hr style="border-color: rgba(255,255,255,0.3);">
-            <h4 style="margin:0; color:white;">One-Time Engineering</h4>
-            <h3 style="margin:0.5rem 0; color:white;">${one_time_eng:,.0f}</h3>
-        </div>
-    """, unsafe_allow_html=True)
-    st.caption(f"7-Year Total (cloud + eng): ${total_7yr:,.0f}")
+# Calculate costs function with actual formulas
+def calculate_costs(size_config, selected_size, num_ingests=1, records_per_day=5000):
+    # Calculate total CKU cost
+    azure_annual = st.session_state.cku_config['azure_ckus'] * st.session_state.cku_config['azure_rate'] * 12
+    gcp_annual = st.session_state.cku_config['gcp_ckus'] * st.session_state.cku_config['gcp_rate'] * 12
+    total_cku_cost_annual = azure_annual + gcp_annual
+
+    # Prorate costs based on resource utilization per ingest
+    partition_ratio = size_config['partitions'] / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
+    storage_ratio = size_config['storage_gb'] / TOTAL_STORAGE_GB if TOTAL_STORAGE_GB > 0 else 0
+
+    # HYBRID MODEL: Base cost per ingest + Variable cost by usage
+    # Confluent cost: 30% base per ingest + 70% variable by partition usage
+    base_cost_per_ingest = total_cku_cost_annual * 0.30 / 100  # Assume 100 typical ingests
+    variable_cost = partition_ratio * total_cku_cost_annual * 0.70
+    compute = (base_cost_per_ingest * num_ingests) + (variable_cost * num_ingests)
+
+    # Storage: 40% base per ingest + 60% variable by storage ratio
+    base_storage_per_ingest = st.session_state.flat_costs['storage'] * 0.40 / 100
+    variable_storage = storage_ratio * st.session_state.flat_costs['storage'] * 0.60
+    storage = (base_storage_per_ingest * num_ingests) + (variable_storage * num_ingests)
+
+    # Network cost scales with partition usage (not flat)
+    # Calculate total partitions across all ingests
+    total_partitions = size_config['partitions'] * num_ingests
+    # Use actual total partitions as reference capacity
+    partition_utilization = total_partitions / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
+    # Cap at 100% utilization (treat as flat cost once capacity is reached)
+    partition_utilization = min(partition_utilization, 1.0)
+    network = st.session_state.flat_costs['network'] * partition_utilization
+
+    # Governance: 40% base per ingest + 60% variable by storage ratio
+    base_governance_per_ingest = st.session_state.flat_costs.get('governance', 42840) * 0.40 / 100
+    variable_governance = storage_ratio * st.session_state.flat_costs.get('governance', 42840) * 0.60
+    governance = (base_governance_per_ingest * num_ingests) + (variable_governance * num_ingests)
+
+    # Scale storage based on data volume
+    records_per_year = records_per_day * 365
+    storage_gb_per_year = records_per_year / (1024 * 1024)
+    storage_multiplier = 1 + (storage_gb_per_year / 1000)
+    storage = storage * storage_multiplier
+
+    total_yearly = compute + storage + network + governance
+    total_monthly = total_yearly / 12
+
+    return {
+        'compute': compute,
+        'storage': storage,
+        'network': network,
+        'governance': governance,
+        'total_yearly': total_yearly,
+        'total_monthly': total_monthly,
+        'partition_utilization': partition_utilization * 100,
+        'num_ingests': num_ingests
+    }
+
+# T-shirt size selection
+st.markdown("## 👕 Select T-Shirt Size")
+size_cols = st.columns(5)
+
+selected_size = st.radio(
+    "Choose Size",
+    options=list(st.session_state.tshirt_sizes.keys()),
+    index=1,  # Default to Medium
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
+# Display size cards
+for idx, (size_name, config) in enumerate(st.session_state.tshirt_sizes.items()):
+    with size_cols[idx]:
+        is_selected = (size_name == selected_size)
+        if is_selected:
+            st.markdown(f"**🔹 {size_name}**")
+        else:
+            st.markdown(f"{size_name}")
+
+        # Show partition split (50/50 inbound/outbound)
+        inbound_partitions = config['partitions'] // 2
+        outbound_partitions = config['partitions'] - inbound_partitions
+        st.caption(f"{config['partitions']} partitions ({inbound_partitions} in / {outbound_partitions} out)")
+        st.caption(f"{config['storage_gb']} GB")
+
+st.divider()
+
+# Get selected configuration - moved earlier to be available for Technical Model Settings
+size_config = st.session_state.tshirt_sizes[selected_size]
+num_ingests = st.session_state.rom_config.get('num_ingests', 1)
+records_per_day = st.session_state.rom_config.get('records_per_day', 5000)
 
 # Technical Model Settings
 if st.session_state.show_technical_model:
@@ -841,27 +678,25 @@ if st.session_state.show_technical_model:
     """)
 
     if st.button("🔄 Sync from ROM", use_container_width=True, type="primary"):
+        # Calculate technical defaults from ROM - scale by number of ingests
         total_partitions = size_config['partitions'] * num_ingests
-        total_records_per_day = records_per_day * num_ingests
-        messages_per_second = total_records_per_day / 86400
-        avg_msg_kb = st.session_state.technical_inputs.get('avg_message_size_kb', 1)
-        gb_per_day = (total_records_per_day * avg_msg_kb) / (1024 * 1024)
 
-        st.session_state.technical_inputs['partitions'] = max(1, int(total_partitions + 0.5))
+        # Scale records by number of ingests (ROM is per-ingest, Technical is total)
+        total_records_per_day = records_per_day * num_ingests
+        messages_per_second = total_records_per_day / 86400  # Convert daily to per-second
+        gb_per_day = (total_records_per_day * 1) / (1024 * 1024 * 1024)  # 1KB avg message size
+
+        # Update technical inputs in session state
+        st.session_state.technical_inputs['partitions'] = max(1, int(total_partitions + 0.5))  # Round up
         st.session_state.technical_inputs['messages_per_second'] = messages_per_second
         st.session_state.technical_inputs['gb_per_day'] = gb_per_day
-        st.session_state.technical_inputs['num_ingests'] = num_ingests
-        st.session_state.technical_inputs['records_per_day'] = total_records_per_day
-        st.session_state.technical_inputs['confluent_cost_per_feed'] = st.session_state.rom_config.get('confluent_monthly_cost', 976)
-        st.session_state.technical_inputs['gcp_cost_per_feed'] = st.session_state.rom_config.get('gcp_per_feed_monthly_cost', 773)
 
+        # Also update the widget keys directly so they reflect the new values
         st.session_state['tech_partitions'] = st.session_state.technical_inputs['partitions']
         st.session_state['tech_msg_per_sec'] = st.session_state.technical_inputs['messages_per_second']
         st.session_state['tech_gb_per_day'] = st.session_state.technical_inputs['gb_per_day']
-        st.session_state['tech_num_ingests'] = num_ingests
-        st.session_state['tech_records_per_day'] = total_records_per_day
 
-        st.success(f"✅ Technical Model synced from ROM configuration ({num_ingests} ingests, {total_records_per_day:,} records/day total)!")
+        st.success(f"✅ Technical Model synced from ROM configuration ({num_ingests} ingests)!")
         st.rerun()
 
     st.divider()
@@ -891,23 +726,6 @@ if st.session_state.show_technical_model:
             step=0.1,
             key="tech_msg_size"
         )
-        st.markdown("#### Feed Scaling")
-        st.session_state.technical_inputs['records_per_day'] = st.number_input(
-            "Records per Day (Total)",
-            value=float(st.session_state.technical_inputs.get('records_per_day', records_per_day * num_ingests)),
-            min_value=0.0,
-            step=1000.0,
-            key="tech_records_per_day",
-            help="Total daily records across all ingests. Synced from ROM when you click Sync from ROM."
-        )
-        st.session_state.technical_inputs['num_ingests'] = st.number_input(
-            "Number of Ingests",
-            value=int(st.session_state.technical_inputs.get('num_ingests', num_ingests)),
-            min_value=0,
-            step=1,
-            key="tech_num_ingests",
-            help="Number of feed ingests. When > 0, adds per-feed Confluent and GCP costs."
-        )
 
     with tech_col2:
         st.markdown("#### Configuration")
@@ -932,23 +750,6 @@ if st.session_state.show_technical_model:
             step=1,
             key="tech_replication"
         )
-        st.markdown("#### Per-Feed Costs")
-        st.session_state.technical_inputs['confluent_cost_per_feed'] = st.number_input(
-            "Confluent $/Feed/Month",
-            value=float(st.session_state.technical_inputs.get('confluent_cost_per_feed', 976)),
-            min_value=0.0,
-            step=10.0,
-            key="tech_confluent_per_feed",
-            help="Monthly Confluent cost per feed. Synced from ROM settings."
-        )
-        st.session_state.technical_inputs['gcp_cost_per_feed'] = st.number_input(
-            "GCP $/Feed/Month",
-            value=float(st.session_state.technical_inputs.get('gcp_cost_per_feed', 773)),
-            min_value=0.0,
-            step=10.0,
-            key="tech_gcp_per_feed",
-            help="Monthly GCP cost per feed. Synced from ROM settings."
-        )
 
     with tech_col3:
         st.markdown("#### Performance")
@@ -963,17 +764,9 @@ if st.session_state.show_technical_model:
         tech_costs_preview = calculate_technical_costs(st.session_state.technical_inputs)
         st.metric("Calculated Storage", f"{tech_costs_preview['storage_gb']:,.2f} GB")
         st.metric("Peak Throughput", f"{tech_costs_preview['throughput_mbps']:,.2f} MB/s")
-        _tech_ni = st.session_state.technical_inputs.get('num_ingests', 0)
-        if _tech_ni > 0:
-            st.metric("Confluent Annual", f"${tech_costs_preview.get('confluent_cost_annual', 0):,}")
-            st.metric("GCP Annual", f"${tech_costs_preview.get('gcp_cost_annual', 0):,}")
 
     st.markdown("#### Cost Preview")
-    _tech_ni = st.session_state.technical_inputs.get('num_ingests', 0)
-    if _tech_ni > 0:
-        tech_preview_col1, tech_preview_col2, tech_preview_col3, tech_preview_col4, tech_preview_col5, tech_preview_col6, tech_preview_col7 = st.columns(7)
-    else:
-        tech_preview_col1, tech_preview_col2, tech_preview_col3, tech_preview_col4, tech_preview_col5 = st.columns(5)
+    tech_preview_col1, tech_preview_col2, tech_preview_col3, tech_preview_col4, tech_preview_col5 = st.columns(5)
 
     with tech_preview_col1:
         st.metric("Storage (Annual)", f"${tech_costs_preview['storage_cost_annual']:,}")
@@ -985,11 +778,6 @@ if st.session_state.show_technical_model:
         st.metric("Partitions (Annual)", f"${tech_costs_preview['partition_cost_annual']:,}")
     with tech_preview_col5:
         st.metric("Total Annual", f"${tech_costs_preview['total_annual']:,}")
-    if _tech_ni > 0:
-        with tech_preview_col6:
-            st.metric("Confluent (Annual)", f"${tech_costs_preview.get('confluent_cost_annual', 0):,}")
-        with tech_preview_col7:
-            st.metric("GCP (Annual)", f"${tech_costs_preview.get('gcp_cost_annual', 0):,}")
 
     if st.button("🔄 Reset Technical Model to Defaults", use_container_width=True):
         st.session_state.technical_inputs = DEFAULT_TECHNICAL_INPUTS.copy()
@@ -997,12 +785,122 @@ if st.session_state.show_technical_model:
 
     st.divider()
 
+# Calculate cost now that size_config is available
+costs = calculate_costs(size_config, selected_size, num_ingests, records_per_day)
+
+# Display total cost in col3 (delayed until costs are calculated)
+with col3:
+    st.markdown("### 📊 Estimated Total Cost")
+    st.markdown(f"""
+        <div class="cost-card">
+            <h4 style="margin:0; color:white;">Monthly</h4>
+            <h2 style="margin:0.5rem 0; color:white;">${costs['total_monthly']:,.0f}</h2>
+            <hr style="border-color: rgba(255,255,255,0.3);">
+            <h4 style="margin:0; color:white;">Yearly</h4>
+            <h3 style="margin:0.5rem 0; color:white;">${costs['total_yearly']:,.0f}</h3>
+        </div>
+    """, unsafe_allow_html=True)
+
+# Size Configuration and Cost Breakdown
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("### ⚙️ Size Configuration")
+
+    st.markdown(f"""
+        <div class="metric-card">
+            <h4>🖥️ Partitions Needed</h4>
+            <h2>{size_config['partitions']}</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+        <div class="metric-card" style="border-left-color: #4CAF50;">
+            <h4>💾 Storage Needed</h4>
+            <h2>{size_config['storage_gb']} GB</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.info(f"""
+    **📈 Utilization & Scaling:**
+    - Compute: {(size_config['partitions'] / TOTAL_PARTITIONS) * 100:.3f}% per ingest × {num_ingests} ingests
+    - Storage: {(size_config['storage_gb'] / TOTAL_STORAGE_GB) * 100:.3f}% per ingest × {num_ingests} ingests
+    - Network: {costs['partition_utilization']:.2f}% utilization ({size_config['partitions'] * num_ingests:.2f} total partitions)
+    - Records: {records_per_day:,} per day
+    """)
+
+with col2:
+    st.markdown("### 💵 Cost Breakdown")
+
+    # Calculate total CKU cost for display
+    azure_annual = st.session_state.cku_config['azure_ckus'] * st.session_state.cku_config['azure_rate'] * 12
+    gcp_annual = st.session_state.cku_config['gcp_ckus'] * st.session_state.cku_config['gcp_rate'] * 12
+    total_cku_annual = azure_annual + gcp_annual
+
+    partition_ratio = size_config['partitions'] / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
+    storage_ratio = size_config['storage_gb'] / TOTAL_STORAGE_GB if TOTAL_STORAGE_GB > 0 else 0
+
+    st.markdown(f"""
+        **🖥️ Compute (CKU) Cost:** ${costs['compute']:,.0f}
+
+        _{partition_ratio:.4f} × ${total_cku_annual:,.0f} × {num_ingests} ingests_
+
+        _({st.session_state.cku_config['azure_ckus']} Azure CKUs + {st.session_state.cku_config['gcp_ckus']} GCP CKUs)_
+    """)
+
+    st.markdown(f"""
+        **💾 Storage Cost:** ${costs['storage']:,.0f}
+
+        _{storage_ratio:.4f} × ${st.session_state.flat_costs['storage']:,.0f} × {num_ingests} ingests × volume_
+    """)
+
+    st.markdown(f"""
+        **🌐 Network Cost:** ${costs['network']:,.0f}
+
+        _{costs['partition_utilization']:.2f}% × ${st.session_state.flat_costs['network']:,.0f}_
+    """)
+
+    st.markdown(f"""
+        **🔒 Governance Cost:** ${costs['governance']:,.0f}
+
+        _{storage_ratio:.4f} × ${st.session_state.flat_costs.get('governance', 42840):,.0f} × {num_ingests} ingests_
+    """)
+
+    st.markdown(f"""
+        ---
+        ### **Total Yearly Cost: ${costs['total_yearly']:,.0f}**
+    """)
 
 # ROM Cost Preview
 st.divider()
 st.markdown("## 📊 ROM Summary")
 
-rom_results = _rom_preview
+# Calculate ROM costs to preview - use selected T-shirt size partitions
+from utils.rom_export import calculate_rom_costs
+
+# Create a preview config that uses the selected T-shirt size partitions
+preview_rom_config = st.session_state.rom_config.copy()
+preview_rom_config['feed_configs'] = [
+    {
+        'inbound': st.session_state.rom_config.get('inbound_feeds', 1),
+        'outbound': st.session_state.rom_config.get('outbound_feeds', 1),
+        'partitions': size_config['partitions']
+    }
+    for _ in range(st.session_state.rom_config.get('num_ingests', 1))
+]
+
+# Add CKU and flat cost configuration for accurate pricing
+preview_rom_config['azure_ckus'] = st.session_state.cku_config['azure_ckus']
+preview_rom_config['azure_rate'] = st.session_state.cku_config['azure_rate']
+preview_rom_config['gcp_ckus'] = st.session_state.cku_config['gcp_ckus']
+preview_rom_config['gcp_rate'] = st.session_state.cku_config['gcp_rate']
+preview_rom_config['total_partitions'] = TOTAL_PARTITIONS
+preview_rom_config['total_storage_gb'] = TOTAL_STORAGE_GB
+preview_rom_config['storage_annual'] = st.session_state.flat_costs.get('storage', 180000)
+preview_rom_config['network_annual'] = st.session_state.flat_costs.get('network', 120000)
+preview_rom_config['governance_annual'] = st.session_state.flat_costs.get('governance', 42840)
+
+rom_results = calculate_rom_costs(preview_rom_config)
 
 rom_col1, rom_col2, rom_col3 = st.columns(3)
 
