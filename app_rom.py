@@ -30,7 +30,7 @@ DEFAULT_TSHIRT_SIZES = {
 DEFAULT_CKU_CONFIG = {
     'azure_ckus': 14,
     'azure_rate': 1925,
-    'gcp_ckus': 28,
+    'gcp_ckus': 34,
     'gcp_rate': 1585
 }
 
@@ -146,25 +146,25 @@ st.markdown("""
 st.markdown('<div class="main-header">🧮 Confluent Cloud Cost Calculator</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">T-Shirt Sizing ROM (Rough Order of Magnitude)</div>', unsafe_allow_html=True)
 
-# Auto-load bundled topic list on first run
+# Auto-load bundled CSV silently on first run
 if st.session_state.parsed_data is None:
     import os
-    _csv_path = os.path.join(os.path.dirname(__file__), 'src', 'assets', 'Topic_list.csv')
+    _csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'assets', 'Topic_list.csv')
     if not os.path.exists(_csv_path):
-        _csv_path = os.path.join(os.path.dirname(__file__), 'Topic_list.csv')
+        _csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Topic_list.csv')
     try:
         with open(_csv_path, 'r') as _f:
             st.session_state.parsed_data = parse_csv_file(_f)
     except Exception:
         pass
 
-# Sidebar for settings
+# Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
 
     st.divider()
 
-    # Settings toggles - vertical layout
+    # Settings toggles
     if st.button("👕 Sizes", use_container_width=True):
         st.session_state.show_settings = not st.session_state.show_settings
 
@@ -177,27 +177,20 @@ with st.sidebar:
     if st.button("⚡ Technical", use_container_width=True):
         st.session_state.show_technical_model = not st.session_state.show_technical_model
 
-    # Hidden data reload panel — not labeled to avoid drawing attention
-    st.sidebar.markdown("<div style='margin-top:2rem'></div>", unsafe_allow_html=True)
+    # Hidden reload panel — inconspicuous at the bottom
+    st.sidebar.markdown("<br><br><br>", unsafe_allow_html=True)
     with st.sidebar.expander("···"):
-        data_source = st.radio(
-            "Source",
-            ["CSV File", "Databricks Table"],
-            label_visibility="collapsed"
-        )
-        if data_source == "Databricks Table":
-            table_name = st.text_input(
-                "Table Name",
-                value="edlprod_users.casey_y_smith.topic_list"
-            )
-            if st.button("Load from Table", use_container_width=True):
+        reload_source = st.radio("", ["CSV File", "Databricks Table"], label_visibility="collapsed")
+        if reload_source == "Databricks Table":
+            table_name = st.text_input("Table", value="edlprod_users.casey_y_smith.topic_list", label_visibility="collapsed")
+            if st.button("Load", use_container_width=True):
                 try:
                     st.session_state.parsed_data = parse_databricks_table(table_name)
-                    st.success(f"Loaded from {table_name}")
+                    st.success("Loaded.")
                 except Exception as e:
-                    st.error(f"Error: {str(e)}")
+                    st.error(str(e))
         else:
-            uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
+            uploaded_file = st.file_uploader("CSV", type=['csv'], label_visibility="collapsed")
             if uploaded_file is not None:
                 st.session_state.parsed_data = parse_csv_file(uploaded_file)
                 st.success("Loaded.")

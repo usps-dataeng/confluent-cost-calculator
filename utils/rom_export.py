@@ -38,7 +38,7 @@ def calculate_rom_costs(config):
     # Get CKU configuration from config
     azure_ckus = config.get('azure_ckus', 14)
     azure_rate = config.get('azure_rate', 1925)
-    gcp_ckus = config.get('gcp_ckus', 28)
+    gcp_ckus = config.get('gcp_ckus', 34)
     gcp_rate = config.get('gcp_rate', 1585)
 
     # Get total resources
@@ -65,7 +65,6 @@ def calculate_rom_costs(config):
 
     # Governance cost: scales with partition share (usage-based)
     governance_cost = governance_annual * partition_utilization
-
 
     first_year_cloud_cost = confluent_cost + gcp_cost + network_cost + governance_cost
 

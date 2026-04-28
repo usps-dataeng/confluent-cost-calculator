@@ -11,7 +11,7 @@ TOTAL_STORAGE_GB = 30844.17
 # CKU Configuration
 azure_ckus = 14
 azure_rate = 1925  # per CKU per month
-gcp_ckus = 28
+gcp_ckus = 34
 gcp_rate = 1585  # per CKU per month
 
 # Flat costs
