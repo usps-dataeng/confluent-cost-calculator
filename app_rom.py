@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from utils.csv_parser import parse_csv_file, parse_databricks_table
+from utils.config_store import load_config, save_config
 from utils.export_data import generate_cost_projection_csv, generate_cost_projection_excel
 from utils.rom_export import (
     generate_rom_export,
@@ -30,7 +31,7 @@ DEFAULT_TSHIRT_SIZES = {
 DEFAULT_CKU_CONFIG = {
     'azure_ckus': 14,
     'azure_rate': 1925,
-    'gcp_ckus': 28,
+    'gcp_ckus': 34,
     'gcp_rate': 1585
 }
 
@@ -63,7 +64,7 @@ DEFAULT_ROM_CONFIG = {
     'workspace_setup_cost': 8000,
     'confluent_monthly_cost': 976,
     'gcp_per_feed_monthly_cost': 773,
-    'escalation_rate': 0.034,
+    'escalation_rate': 0.038,
     'start_year': datetime.now().year,
     'records_per_day': 5000,  # Daily volume
     'num_ingests': 1,  # Number of separate ingests
@@ -93,9 +94,21 @@ if 'show_cost_settings' not in st.session_state:
 if 'parsed_data' not in st.session_state:
     st.session_state.parsed_data = None
 if 'cku_config' not in st.session_state:
-    st.session_state.cku_config = DEFAULT_CKU_CONFIG.copy()
+    _cfg = load_config()
+    st.session_state.cku_config = {
+        'azure_ckus': _cfg['azure_ckus'],
+        'azure_rate': _cfg['azure_rate'],
+        'gcp_ckus': _cfg['gcp_ckus'],
+        'gcp_rate': _cfg['gcp_rate'],
+    }
 if 'flat_costs' not in st.session_state:
-    st.session_state.flat_costs = DEFAULT_FLAT_COSTS.copy()
+    _cfg = load_config()
+    st.session_state.flat_costs = {
+        'storage': _cfg['storage_annual'],
+        'network': _cfg['network_annual'],
+        'network_multiplier': _cfg['network_multiplier'],
+        'governance': _cfg['governance_annual'],
+    }
 # Ensure governance key exists (for backward compatibility with old sessions)
 if 'governance' not in st.session_state.flat_costs:
     st.session_state.flat_costs['governance'] = DEFAULT_FLAT_COSTS['governance']
@@ -203,7 +216,7 @@ with st.expander("📖 How to Use This Calculator", expanded=False):
     | Workspace Setup Cost | — | One-time environment provisioning |
     | Confluent Monthly Cost | $976 | Per-feed Confluent Cloud recurring cost |
     | GCP Per Feed Monthly | $773 | Per-feed GCP infrastructure cost |
-    | Escalation Rate | 0.034 (3.4%) | Applied to cloud costs in years 2–7. Synced with Cost Config panel. |
+    | Escalation Rate | 0.034 (3.4%) | Applied to cloud costs in years 2–7. |
 
     ---
 
@@ -306,8 +319,8 @@ with st.expander("📖 How to Use This Calculator", expanded=False):
     **What if my project has multiple feeds of different sizes?**
     The calculator applies one T-shirt size uniformly across all ingests. If feeds vary significantly, run separate estimates per size tier and combine the totals manually.
 
-    **The escalation rate shows in two places — which one do I use?**
-    Either — they are the same value. "Annual Increase Rate (%)" in the Cost Configuration panel and "Escalation Rate" in ROM Settings both control the same number.
+    **Where do I set the escalation rate?**
+    In the ROM Settings panel (Sidebar → 📊 ROM), under Cloud Costs. The "Escalation Rate" field controls the annual cost increase applied to cloud costs in years 2–7.
 
     **When should I use the Technical Model vs the ROM?**
     Use the ROM for initial client conversations, TSLC submissions, and deal sizing. Use the Technical Model when you need to show detailed infrastructure justification, validate a T-shirt size, or when a client asks how the number was derived.
@@ -381,8 +394,9 @@ if st.session_state.parsed_data is None:
     st.stop()
 
 parsed_data = st.session_state.parsed_data
-TOTAL_PARTITIONS = parsed_data['total_partitions']
-TOTAL_STORAGE_GB = parsed_data['total_storage_gb']
+_saved_cfg = load_config()
+TOTAL_PARTITIONS = _saved_cfg['total_partitions']
+TOTAL_STORAGE_GB = _saved_cfg['total_storage_gb']
 
 # T-Shirt Size Settings panel
 if st.session_state.show_settings:
@@ -702,7 +716,7 @@ if st.session_state.show_rom_settings:
             step=0.001,
             format="%.3f",
             key="escalation_rate_input",
-            help="Annual cost increase rate (e.g., 0.034 = 3.4%)"
+            help="Annual cost increase rate (e.g., 0.038 = 3.8%)"
         )
     with col2:
         st.session_state.rom_config['start_year'] = st.number_input(
@@ -724,7 +738,7 @@ if st.session_state.show_rom_settings:
     st.divider()
 
 # Main content
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("### 🖥️ Total Resources")
@@ -759,16 +773,6 @@ with col2:
         "Governance Annual",
         f"${st.session_state.flat_costs.get('governance', 42840):,}",
         help="Total annual governance cost (Azure + GCP)"
-    )
-
-    annual_increase_rate = st.number_input(
-        "Annual Increase Rate (%)",
-        value=3.0,
-        min_value=0.0,
-        max_value=100.0,
-        step=0.1,
-        format="%.1f",
-        help="Used for 7-year cost projection"
     )
 
 # Calculate costs function with actual formulas
@@ -984,19 +988,6 @@ if st.session_state.show_technical_model:
 
 # Calculate cost now that size_config is available
 costs = calculate_costs(size_config, selected_size, num_ingests, records_per_day)
-
-# Display total cost in col3 (delayed until costs are calculated)
-with col3:
-    st.markdown("### 📊 Estimated Total Cost")
-    st.markdown(f"""
-        <div class="cost-card">
-            <h4 style="margin:0; color:white;">Monthly</h4>
-            <h2 style="margin:0.5rem 0; color:white;">${costs['total_monthly']:,.0f}</h2>
-            <hr style="border-color: rgba(255,255,255,0.3);">
-            <h4 style="margin:0; color:white;">Yearly</h4>
-            <h3 style="margin:0.5rem 0; color:white;">${costs['total_yearly']:,.0f}</h3>
-        </div>
-    """, unsafe_allow_html=True)
 
 # Size Configuration and Cost Breakdown
 col1, col2 = st.columns(2)
