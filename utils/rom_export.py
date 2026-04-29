@@ -38,11 +38,11 @@ def calculate_rom_costs(config):
     # Get CKU configuration from config
     azure_ckus = config.get('azure_ckus', 14)
     azure_rate = config.get('azure_rate', 1925)
-    gcp_ckus = config.get('gcp_ckus', 34)
+    gcp_ckus = config.get('gcp_ckus', 28)
     gcp_rate = config.get('gcp_rate', 1585)
 
     # Get total resources
-    TOTAL_PARTITIONS = config.get('total_partitions', 12034)
+    TOTAL_PARTITIONS = config.get('total_partitions', 20224)
     TOTAL_STORAGE_GB = config.get('total_storage_gb', 30844.17)
 
     # Get flat costs
@@ -806,7 +806,7 @@ def generate_rom_export_excel_cloud_only(config):
     gcp_monthly = config.get('gcp_per_feed_monthly_cost', config.get('gcp_per_feed_annual_cost', 773) / 12)
 
     # Get total partitions for reference
-    TOTAL_PARTITIONS = config.get('total_partitions', 12034)
+    TOTAL_PARTITIONS = config.get('total_partitions', 20224)
 
     assumptions = [
         f"ROM covers {results['total_feeds']} EEB ingest feed(s)",

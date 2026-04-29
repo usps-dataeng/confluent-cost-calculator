@@ -30,17 +30,21 @@ DEFAULT_TSHIRT_SIZES = {
 DEFAULT_CKU_CONFIG = {
     'azure_ckus': 14,
     'azure_rate': 1925,
-    'gcp_ckus': 34,
+    'gcp_ckus': 28,
     'gcp_rate': 1585
 }
 
 # Default Flat Annual Costs (Editable in settings)
 DEFAULT_FLAT_COSTS = {
-    'storage': 180000,      # $15,000/month (Azure + GCP)
-    'network': 120000,      # $10,000/month (Azure + GCP)
-    'network_multiplier': 0.75,  # Network cost multiplier (adjustable)
-    'governance': 42840     # $3,570/month (Azure + GCP)
+    'storage': 180000,
+    'network': 120000,
+    'network_multiplier': 0.75,
+    'governance': 42840
 }
+
+# Default network totals (editable in Cost settings)
+DEFAULT_TOTAL_PARTITIONS = 20224
+DEFAULT_TOTAL_STORAGE_GB = 30844.17
 
 # Default Ingestion Rates (GB/day) - Affects network costs
 DEFAULT_INGESTION_RATES = {
@@ -65,10 +69,10 @@ DEFAULT_ROM_CONFIG = {
     'gcp_per_feed_monthly_cost': 773,
     'escalation_rate': 0.034,
     'start_year': datetime.now().year,
-    'records_per_day': 5000,  # Daily volume
-    'num_ingests': 1,  # Number of separate ingests
-    'feed_configs': [  # Configuration for each feed - will be overridden by T-shirt size selection
-        {'inbound': 1, 'outbound': 1, 'partitions': 24}  # Default to Medium (24 partitions)
+    'records_per_day': 5000,
+    'num_ingests': 1,
+    'feed_configs': [
+        {'inbound': 1, 'outbound': 1, 'partitions': 24}
     ]
 }
 
@@ -79,9 +83,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize session state for selected_env
+# Initialize session state
 if "selected_env" not in st.session_state:
-    st.session_state.selected_env = "default"  # or "dev", "prod", etc.
+    st.session_state.selected_env = "default"
 if 'tshirt_sizes' not in st.session_state:
     st.session_state.tshirt_sizes = DEFAULT_TSHIRT_SIZES.copy()
 if 'ingestion_rates' not in st.session_state:
@@ -90,13 +94,10 @@ if 'show_settings' not in st.session_state:
     st.session_state.show_settings = False
 if 'show_cost_settings' not in st.session_state:
     st.session_state.show_cost_settings = False
-if 'parsed_data' not in st.session_state:
-    st.session_state.parsed_data = None
 if 'cku_config' not in st.session_state:
     st.session_state.cku_config = DEFAULT_CKU_CONFIG.copy()
 if 'flat_costs' not in st.session_state:
     st.session_state.flat_costs = DEFAULT_FLAT_COSTS.copy()
-# Ensure governance key exists (for backward compatibility with old sessions)
 if 'governance' not in st.session_state.flat_costs:
     st.session_state.flat_costs['governance'] = DEFAULT_FLAT_COSTS['governance']
 if 'rom_config' not in st.session_state:
@@ -107,6 +108,10 @@ if 'technical_inputs' not in st.session_state:
     st.session_state.technical_inputs = DEFAULT_TECHNICAL_INPUTS.copy()
 if 'show_technical_model' not in st.session_state:
     st.session_state.show_technical_model = False
+if 'total_partitions' not in st.session_state:
+    st.session_state.total_partitions = DEFAULT_TOTAL_PARTITIONS
+if 'total_storage_gb' not in st.session_state:
+    st.session_state.total_storage_gb = DEFAULT_TOTAL_STORAGE_GB
 
 # Custom CSS
 st.markdown("""
@@ -146,21 +151,38 @@ st.markdown("""
 st.markdown('<div class="main-header">🧮 Confluent Cloud Cost Calculator</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">T-Shirt Sizing ROM (Rough Order of Magnitude)</div>', unsafe_allow_html=True)
 
-# Auto-load bundled CSV silently on first run
-if st.session_state.parsed_data is None:
-    import os
-    _csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'assets', 'Topic_list.csv')
-    if not os.path.exists(_csv_path):
-        _csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Topic_list.csv')
-    try:
-        with open(_csv_path, 'r') as _f:
-            st.session_state.parsed_data = parse_csv_file(_f)
-    except Exception:
-        pass
-
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
+
+    # Data Source Selection (optional — data no longer required to run)
+    data_source = st.radio(
+        "Data Source (Optional)",
+        ["None", "Databricks Table", "Upload CSV"],
+        help="Optionally load topic data. Network totals are editable in Cost settings."
+    )
+
+    if data_source == "Databricks Table":
+        table_name = st.text_input(
+            "Table Name",
+            value="edlprod_users.casey_y_smith.topic_list",
+            help="Fully qualified table name"
+        )
+        if st.button("📊 Load from Table", use_container_width=True):
+            try:
+                parsed = parse_databricks_table(table_name)
+                st.session_state.total_partitions = parsed['total_partitions']
+                st.session_state.total_storage_gb = parsed['total_storage_gb']
+                st.success(f"✅ Loaded from {table_name}")
+            except Exception as e:
+                st.error(f"❌ Error loading table: {str(e)}")
+    elif data_source == "Upload CSV":
+        uploaded_file = st.file_uploader("📤 Upload Topic List CSV", type=['csv'])
+        if uploaded_file is not None:
+            parsed = parse_csv_file(uploaded_file)
+            st.session_state.total_partitions = parsed['total_partitions']
+            st.session_state.total_storage_gb = parsed['total_storage_gb']
+            st.success("File uploaded successfully!")
 
     st.divider()
 
@@ -177,30 +199,9 @@ with st.sidebar:
     if st.button("⚡ Technical", use_container_width=True):
         st.session_state.show_technical_model = not st.session_state.show_technical_model
 
-    # Hidden reload panel — inconspicuous at the bottom
-    st.sidebar.markdown("<br><br><br>", unsafe_allow_html=True)
-    with st.sidebar.expander("···"):
-        reload_source = st.radio("", ["CSV File", "Databricks Table"], label_visibility="collapsed")
-        if reload_source == "Databricks Table":
-            table_name = st.text_input("Table", value="edlprod_users.casey_y_smith.topic_list", label_visibility="collapsed")
-            if st.button("Load", use_container_width=True):
-                try:
-                    st.session_state.parsed_data = parse_databricks_table(table_name)
-                    st.success("Loaded.")
-                except Exception as e:
-                    st.error(str(e))
-        else:
-            uploaded_file = st.file_uploader("CSV", type=['csv'], label_visibility="collapsed")
-            if uploaded_file is not None:
-                st.session_state.parsed_data = parse_csv_file(uploaded_file)
-                st.success("Loaded.")
-
-if st.session_state.parsed_data is None:
-    st.stop()
-
-parsed_data = st.session_state.parsed_data
-TOTAL_PARTITIONS = parsed_data['total_partitions']
-TOTAL_STORAGE_GB = parsed_data['total_storage_gb']
+# Convenience aliases — all downstream code uses these variables
+TOTAL_PARTITIONS = st.session_state.total_partitions
+TOTAL_STORAGE_GB = st.session_state.total_storage_gb
 
 # T-Shirt Size Settings panel
 if st.session_state.show_settings:
@@ -237,13 +238,53 @@ if st.session_state.show_settings:
 
     st.divider()
 
-# Cost Settings panel (hidden by default)
+# Cost Settings panel
 if st.session_state.show_cost_settings:
     st.header("💰 CKU & Cost Configuration")
 
     st.info("⚙️ Edit these settings to match your infrastructure costs. All values are editable.")
 
-    # CKU Configuration
+    # ── Network Totals ────────────────────────────────────────────────────────
+    st.subheader("Network Totals")
+    st.caption("Total partitions and storage for the entire Confluent cluster. Changing these affects all cost ratios.")
+
+    net_col1, net_col2, net_col3 = st.columns([2, 2, 1])
+
+    with net_col1:
+        st.session_state.total_partitions = st.number_input(
+            "Total Network Partitions",
+            value=int(st.session_state.total_partitions),
+            min_value=1,
+            step=1,
+            key="total_partitions_input",
+            help="Total partitions across all topics in the cluster"
+        )
+
+    with net_col2:
+        st.session_state.total_storage_gb = st.number_input(
+            "Total Network Storage (GB)",
+            value=float(st.session_state.total_storage_gb),
+            min_value=0.01,
+            step=100.0,
+            format="%.2f",
+            key="total_storage_gb_input",
+            help="Total storage across all topics in the cluster"
+        )
+
+    with net_col3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🔄 Reset", key="reset_network_totals", use_container_width=True):
+            st.session_state.total_partitions = DEFAULT_TOTAL_PARTITIONS
+            st.session_state.total_storage_gb = DEFAULT_TOTAL_STORAGE_GB
+            st.rerun()
+
+    # Update aliases after potential widget changes
+    TOTAL_PARTITIONS = st.session_state.total_partitions
+    TOTAL_STORAGE_GB = st.session_state.total_storage_gb
+
+    st.divider()
+
+    # ── CKU Configuration ────────────────────────────────────────────────────
     st.subheader("CKU Configuration")
     col1, col2 = st.columns(2)
 
@@ -290,7 +331,7 @@ if st.session_state.show_cost_settings:
 
     st.divider()
 
-    # Flat Annual Costs
+    # ── Flat Annual Costs ────────────────────────────────────────────────────
     st.subheader("Flat Annual Costs")
     col1, col2, col3, col4 = st.columns(4)
 
@@ -337,10 +378,8 @@ if st.session_state.show_cost_settings:
         )
 
     st.divider()
-
     st.caption("💡 Note: Partitions are split 50/50 between inbound and outbound")
 
-    # Reset button
     if st.button("🔄 Reset All Costs to Defaults", use_container_width=True):
         st.session_state.cku_config = DEFAULT_CKU_CONFIG.copy()
         st.session_state.flat_costs = DEFAULT_FLAT_COSTS.copy()
@@ -348,16 +387,13 @@ if st.session_state.show_cost_settings:
 
     st.divider()
 
-# ROM Settings panel (hidden by default)
+# ROM Settings panel
 if st.session_state.show_rom_settings:
     st.header("📊 ROM Configuration")
-
     st.info("⚙️ Edit these settings to match your ROM requirements.")
 
-    # Volume and Ingests Configuration
     st.markdown("### 📊 Project Basics")
 
-    # Project Name Input
     if 'project_name' not in st.session_state.rom_config:
         st.session_state.rom_config['project_name'] = ""
 
@@ -400,7 +436,6 @@ if st.session_state.show_rom_settings:
             key="de_hourly_rate_input"
         )
 
-    # Initialize feed_configs if not present
     if 'feed_configs' not in st.session_state.rom_config or len(st.session_state.rom_config['feed_configs']) != st.session_state.rom_config['num_ingests']:
         st.session_state.rom_config['feed_configs'] = [
             {'inbound': 1, 'outbound': 1, 'partitions': 0.048}
@@ -409,7 +444,6 @@ if st.session_state.show_rom_settings:
 
     st.divider()
 
-    # Engineering Hours Configuration
     st.markdown("### 👨‍💻 Engineering Hours")
     eng_col1, eng_col2, eng_col3 = st.columns(3)
 
@@ -443,7 +477,6 @@ if st.session_state.show_rom_settings:
 
     st.divider()
 
-    # Cloud Costs Configuration
     st.markdown("### ☁️ Cloud Costs")
     cloud_col1, cloud_col2, cloud_col3 = st.columns(3)
 
@@ -457,7 +490,6 @@ if st.session_state.show_rom_settings:
         )
 
     with cloud_col2:
-        # Support both old and new config keys
         if 'confluent_monthly_cost' not in st.session_state.rom_config:
             st.session_state.rom_config['confluent_monthly_cost'] = st.session_state.rom_config.get('confluent_annual_cost', 11709) / 12
 
@@ -473,7 +505,6 @@ if st.session_state.show_rom_settings:
         st.caption(f"Annual: ${monthly_confluent * 12:,.0f}")
 
     with cloud_col3:
-        # Support both old and new config keys
         if 'gcp_per_feed_monthly_cost' not in st.session_state.rom_config:
             st.session_state.rom_config['gcp_per_feed_monthly_cost'] = st.session_state.rom_config.get('gcp_per_feed_annual_cost', 9279) / 12
 
@@ -512,7 +543,6 @@ if st.session_state.show_rom_settings:
 
     st.divider()
 
-    # Reset button
     if st.button("🔄 Reset ROM Settings to Defaults", use_container_width=True):
         st.session_state.rom_config = DEFAULT_ROM_CONFIG.copy()
         st.rerun()
@@ -527,11 +557,11 @@ with col1:
     st.metric("Total Partitions", f"{TOTAL_PARTITIONS:,}")
     st.metric("Total Storage", f"{TOTAL_STORAGE_GB:,.2f} GB")
     st.caption(f"{TOTAL_STORAGE_GB / 1024:.2f} TB")
+    st.caption("Edit in 💰 Cost settings")
 
 with col2:
     st.markdown("### 💰 Cost Configuration")
 
-    # Calculate total CKU costs
     azure_annual = st.session_state.cku_config['azure_ckus'] * st.session_state.cku_config['azure_rate'] * 12
     gcp_annual = st.session_state.cku_config['gcp_ckus'] * st.session_state.cku_config['gcp_rate'] * 12
     total_cku_cost_annual = azure_annual + gcp_annual
@@ -567,43 +597,32 @@ with col2:
         help="Used for 7-year cost projection"
     )
 
-# Calculate costs function with actual formulas
+# Calculate costs function
 def calculate_costs(size_config, selected_size, num_ingests=1, records_per_day=5000):
-    # Calculate total CKU cost
     azure_annual = st.session_state.cku_config['azure_ckus'] * st.session_state.cku_config['azure_rate'] * 12
     gcp_annual = st.session_state.cku_config['gcp_ckus'] * st.session_state.cku_config['gcp_rate'] * 12
     total_cku_cost_annual = azure_annual + gcp_annual
 
-    # Prorate costs based on resource utilization per ingest
     partition_ratio = size_config['partitions'] / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
     storage_ratio = size_config['storage_gb'] / TOTAL_STORAGE_GB if TOTAL_STORAGE_GB > 0 else 0
 
-    # HYBRID MODEL: Base cost per ingest + Variable cost by usage
-    # Confluent cost: 30% base per ingest + 70% variable by partition usage
-    base_cost_per_ingest = total_cku_cost_annual * 0.30 / 100  # Assume 100 typical ingests
+    base_cost_per_ingest = total_cku_cost_annual * 0.30 / 100
     variable_cost = partition_ratio * total_cku_cost_annual * 0.70
     compute = (base_cost_per_ingest * num_ingests) + (variable_cost * num_ingests)
 
-    # Storage: 40% base per ingest + 60% variable by storage ratio
     base_storage_per_ingest = st.session_state.flat_costs['storage'] * 0.40 / 100
     variable_storage = storage_ratio * st.session_state.flat_costs['storage'] * 0.60
     storage = (base_storage_per_ingest * num_ingests) + (variable_storage * num_ingests)
 
-    # Network cost scales with partition usage (not flat)
-    # Calculate total partitions across all ingests
-    total_partitions = size_config['partitions'] * num_ingests
-    # Use actual total partitions as reference capacity
-    partition_utilization = total_partitions / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
-    # Cap at 100% utilization (treat as flat cost once capacity is reached)
+    total_partitions_used = size_config['partitions'] * num_ingests
+    partition_utilization = total_partitions_used / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
     partition_utilization = min(partition_utilization, 1.0)
     network = st.session_state.flat_costs['network'] * partition_utilization
 
-    # Governance: 40% base per ingest + 60% variable by storage ratio
     base_governance_per_ingest = st.session_state.flat_costs.get('governance', 42840) * 0.40 / 100
     variable_governance = storage_ratio * st.session_state.flat_costs.get('governance', 42840) * 0.60
     governance = (base_governance_per_ingest * num_ingests) + (variable_governance * num_ingests)
 
-    # Scale storage based on data volume
     records_per_year = records_per_day * 365
     storage_gb_per_year = records_per_year / (1024 * 1024)
     storage_multiplier = 1 + (storage_gb_per_year / 1000)
@@ -630,12 +649,11 @@ size_cols = st.columns(5)
 selected_size = st.radio(
     "Choose Size",
     options=list(st.session_state.tshirt_sizes.keys()),
-    index=1,  # Default to Medium
+    index=1,
     horizontal=True,
     label_visibility="collapsed"
 )
 
-# Display size cards
 for idx, (size_name, config) in enumerate(st.session_state.tshirt_sizes.items()):
     with size_cols[idx]:
         is_selected = (size_name == selected_size)
@@ -643,8 +661,6 @@ for idx, (size_name, config) in enumerate(st.session_state.tshirt_sizes.items())
             st.markdown(f"**🔹 {size_name}**")
         else:
             st.markdown(f"{size_name}")
-
-        # Show partition split (50/50 inbound/outbound)
         inbound_partitions = config['partitions'] // 2
         outbound_partitions = config['partitions'] - inbound_partitions
         st.caption(f"{config['partitions']} partitions ({inbound_partitions} in / {outbound_partitions} out)")
@@ -652,7 +668,6 @@ for idx, (size_name, config) in enumerate(st.session_state.tshirt_sizes.items())
 
 st.divider()
 
-# Get selected configuration - moved earlier to be available for Technical Model Settings
 size_config = st.session_state.tshirt_sizes[selected_size]
 num_ingests = st.session_state.rom_config.get('num_ingests', 1)
 records_per_day = st.session_state.rom_config.get('records_per_day', 5000)
@@ -661,7 +676,6 @@ records_per_day = st.session_state.rom_config.get('records_per_day', 5000)
 if st.session_state.show_technical_model:
     st.markdown("### ⚡ Technical Cost Model Configuration")
 
-    # Show ROM sync info and button
     st.info(f"""
     **Current ROM Configuration:**
     - Number of Ingests: {num_ingests}
@@ -671,20 +685,15 @@ if st.session_state.show_technical_model:
     """)
 
     if st.button("🔄 Sync from ROM", use_container_width=True, type="primary"):
-        # Calculate technical defaults from ROM - scale by number of ingests
-        total_partitions = size_config['partitions'] * num_ingests
-
-        # Scale records by number of ingests (ROM is per-ingest, Technical is total)
+        total_partitions_used = size_config['partitions'] * num_ingests
         total_records_per_day = records_per_day * num_ingests
-        messages_per_second = total_records_per_day / 86400  # Convert daily to per-second
-        gb_per_day = (total_records_per_day * 1) / (1024 * 1024 * 1024)  # 1KB avg message size
+        messages_per_second = total_records_per_day / 86400
+        gb_per_day = (total_records_per_day * 1) / (1024 * 1024 * 1024)
 
-        # Update technical inputs in session state
-        st.session_state.technical_inputs['partitions'] = max(1, int(total_partitions + 0.5))  # Round up
+        st.session_state.technical_inputs['partitions'] = max(1, int(total_partitions_used + 0.5))
         st.session_state.technical_inputs['messages_per_second'] = messages_per_second
         st.session_state.technical_inputs['gb_per_day'] = gb_per_day
 
-        # Also update the widget keys directly so they reflect the new values
         st.session_state['tech_partitions'] = st.session_state.technical_inputs['partitions']
         st.session_state['tech_msg_per_sec'] = st.session_state.technical_inputs['messages_per_second']
         st.session_state['tech_gb_per_day'] = st.session_state.technical_inputs['gb_per_day']
@@ -778,10 +787,10 @@ if st.session_state.show_technical_model:
 
     st.divider()
 
-# Calculate cost now that size_config is available
+# Calculate costs
 costs = calculate_costs(size_config, selected_size, num_ingests, records_per_day)
 
-# Display total cost in col3 (delayed until costs are calculated)
+# Display total cost in col3
 with col3:
     st.markdown("### 📊 Estimated Total Cost")
     st.markdown(f"""
@@ -825,7 +834,6 @@ with col1:
 with col2:
     st.markdown("### 💵 Cost Breakdown")
 
-    # Calculate total CKU cost for display
     azure_annual = st.session_state.cku_config['azure_ckus'] * st.session_state.cku_config['azure_rate'] * 12
     gcp_annual = st.session_state.cku_config['gcp_ckus'] * st.session_state.cku_config['gcp_rate'] * 12
     total_cku_annual = azure_annual + gcp_annual
@@ -868,10 +876,8 @@ with col2:
 st.divider()
 st.markdown("## 📊 ROM Summary")
 
-# Calculate ROM costs to preview - use selected T-shirt size partitions
 from utils.rom_export import calculate_rom_costs
 
-# Create a preview config that uses the selected T-shirt size partitions
 preview_rom_config = st.session_state.rom_config.copy()
 preview_rom_config['feed_configs'] = [
     {
@@ -882,7 +888,6 @@ preview_rom_config['feed_configs'] = [
     for _ in range(st.session_state.rom_config.get('num_ingests', 1))
 ]
 
-# Add CKU and flat cost configuration for accurate pricing
 preview_rom_config['azure_ckus'] = st.session_state.cku_config['azure_ckus']
 preview_rom_config['azure_rate'] = st.session_state.cku_config['azure_rate']
 preview_rom_config['gcp_ckus'] = st.session_state.cku_config['gcp_ckus']
@@ -1018,13 +1023,9 @@ st.divider()
 col1, col2 = st.columns([3, 1])
 with col2:
     if st.button("📥 Export Reports", use_container_width=True, type="primary"):
-        # Update ROM config with selected T-shirt size partitions
         export_rom_config = st.session_state.rom_config.copy()
-
-        # Get the selected size's partition count
         selected_partitions = size_config['partitions']
 
-        # Update feed_configs with the actual partition count from the selected T-shirt size
         export_rom_config['feed_configs'] = [
             {
                 'inbound': st.session_state.rom_config.get('inbound_feeds', 1),
@@ -1034,7 +1035,6 @@ with col2:
             for _ in range(st.session_state.rom_config.get('num_ingests', 1))
         ]
 
-        # Provide three separate ROM exports
         st.markdown("### ROM Exports")
         rom_col1, rom_col2, rom_col3 = st.columns(3)
 
@@ -1098,6 +1098,8 @@ with st.expander("📐 Formula Reference"):
     Current: ({st.session_state.cku_config['azure_ckus']} × ${st.session_state.cku_config['azure_rate']} × 12) +
              ({st.session_state.cku_config['gcp_ckus']} × ${st.session_state.cku_config['gcp_rate']} × 12) =
              ${(st.session_state.cku_config['azure_ckus'] * st.session_state.cku_config['azure_rate'] * 12 + st.session_state.cku_config['gcp_ckus'] * st.session_state.cku_config['gcp_rate'] * 12):,.0f}
+
+    Total Network Partitions (denominator): {TOTAL_PARTITIONS:,}
     ```
 
     #### Storage Cost Formula:
@@ -1105,6 +1107,7 @@ with st.expander("📐 Formula Reference"):
     (Storage Needed / Total Storage) × Total Annual Storage Cost
 
     Current: ${st.session_state.flat_costs['storage']:,}
+    Total Network Storage (denominator): {TOTAL_STORAGE_GB:,.2f} GB
     ```
 
     #### Network Cost Formula:
@@ -1125,6 +1128,7 @@ with st.expander("📐 Formula Reference"):
     - Partitions are split 50/50 between inbound and outbound
     - Network cost is flat (not prorated by usage)
     - All costs are editable in Settings (💰 Costs button)
+    - Total Network Partitions and Storage are editable in 💰 Cost settings
     """)
 
 # Footer

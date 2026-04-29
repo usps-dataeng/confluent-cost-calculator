@@ -23,11 +23,7 @@ def generate_technical_export(
     throughput_cost_per_mbps_month,
     network_cost_per_gb_month,
     partition_cost_per_partition_month,
-    retention_overhead_pct,
-    num_ingests=0,
-    records_per_day=0,
-    confluent_cost_per_feed=976,
-    gcp_cost_per_feed=773,
+    retention_overhead_pct
 ):
     """
     Generate comprehensive technical cost model export matching the React version format.
@@ -42,8 +38,7 @@ def generate_technical_export(
 
     # Create sheets
     create_input_parameters_sheet(wb, data_volume_gb_day, message_rate, avg_message_size_kb,
-                                   retention_days, partitions, replication_factor, peak_avg_ratio,
-                                   num_ingests, records_per_day, confluent_cost_per_feed, gcp_cost_per_feed)
+                                   retention_days, partitions, replication_factor, peak_avg_ratio)
 
     create_calculated_metrics_sheet(wb, data_volume_gb_day, message_rate, avg_message_size_kb,
                                      retention_days, replication_factor, peak_avg_ratio)
@@ -51,8 +46,7 @@ def generate_technical_export(
     create_cost_breakdown_sheet(wb, costs, storage_cost_per_gb_month, throughput_cost_per_mbps_month,
                                  network_cost_per_gb_month, partition_cost_per_partition_month,
                                  retention_overhead_pct, data_volume_gb_day, message_rate,
-                                 retention_days, replication_factor, partitions,
-                                 num_ingests, confluent_cost_per_feed, gcp_cost_per_feed)
+                                 retention_days, replication_factor, partitions)
 
     create_cost_drivers_sheet(wb, data_volume_gb_day, message_rate, retention_days,
                                partitions, replication_factor, peak_avg_ratio)
@@ -103,65 +97,59 @@ def apply_cell_style(cell, is_header=False, is_bold=False, bg_color=None):
 
 
 def create_input_parameters_sheet(wb, data_volume_gb_day, message_rate, avg_message_size_kb,
-                                   retention_days, partitions, replication_factor, peak_avg_ratio,
-                                   num_ingests=0, records_per_day=0,
-                                   confluent_cost_per_feed=976, gcp_cost_per_feed=773):
+                                   retention_days, partitions, replication_factor, peak_avg_ratio):
     """Create INPUT PARAMETERS sheet"""
     ws = wb.create_sheet("Input Parameters")
 
-    ws.merge_cells('A1:D1')
+    # Title
+    ws.merge_cells('A1:C1')
     title = ws['A1']
     title.value = 'Confluent Technical Cost Model Analysis'
     title.font = Font(name='Calibri', size=14, bold=True)
     title.alignment = Alignment(horizontal='center')
 
-    ws.merge_cells('A2:D2')
+    ws.merge_cells('A2:C2')
     subtitle = ws['A2']
     subtitle.value = 'Infrastructure Capacity Planning & Cost Estimation'
     subtitle.font = Font(name='Calibri', size=11, italic=True)
     subtitle.alignment = Alignment(horizontal='center')
 
+    # Headers
     ws['A4'] = 'INPUT PARAMETERS'
     ws['A4'].font = Font(bold=True, size=12)
 
-    for col, label in [('A', 'Parameter'), ('B', 'Value'), ('C', 'Unit'), ('D', 'Notes')]:
-        ws[f'{col}5'] = label
-        apply_header_style(ws[f'{col}5'])
+    ws['A5'] = 'Parameter'
+    ws['B5'] = 'Value'
+    ws['C5'] = 'Unit'
+    apply_header_style(ws['A5'])
+    apply_header_style(ws['B5'])
+    apply_header_style(ws['C5'])
 
+    # Data rows
     params = [
-        ('Data Volume', data_volume_gb_day, 'GB/day', 'Daily data ingestion volume'),
-        ('Message Rate', message_rate, 'messages/sec', 'Peak message throughput'),
-        ('Average Message Size', avg_message_size_kb, 'KB', 'Per message payload size'),
-        ('Retention Period', retention_days, 'days', 'Data retention duration'),
-        ('Partitions', partitions, 'count', 'Topic partition count for parallelism'),
-        ('Replication Factor', replication_factor, 'replicas', 'Data redundancy multiplier'),
-        ('Peak to Average Ratio', peak_avg_ratio, 'x', 'Traffic spike multiplier'),
+        ('Data Volume', data_volume_gb_day, 'GB/day'),
+        ('Message Rate', message_rate, 'messages/sec'),
+        ('Average Message Size', avg_message_size_kb, 'KB'),
+        ('Retention Period', retention_days, 'days'),
+        ('Partitions', partitions, 'count'),
+        ('Replication Factor', replication_factor, 'replicas'),
+        ('Peak to Average Ratio', peak_avg_ratio, 'x')
     ]
 
-    if num_ingests > 0 or records_per_day > 0:
-        params += [
-            ('Number of Ingests', num_ingests, 'feeds', 'Total ingest feed pipelines (synced from ROM)'),
-            ('Records per Day', int(records_per_day), 'records/day', 'Total daily records across all feeds'),
-            ('Confluent Cost per Feed', confluent_cost_per_feed, '$/feed/month', 'Monthly Confluent Cloud cost per feed'),
-            ('GCP Cost per Feed', gcp_cost_per_feed, '$/feed/month', 'Monthly GCP infrastructure cost per feed'),
-        ]
-
     row = 6
-    for param, value, unit, notes in params:
+    for param, value, unit in params:
         ws[f'A{row}'] = param
         ws[f'B{row}'] = value
         ws[f'C{row}'] = unit
-        ws[f'D{row}'] = notes
         apply_cell_style(ws[f'A{row}'])
         apply_cell_style(ws[f'B{row}'])
         apply_cell_style(ws[f'C{row}'])
-        apply_cell_style(ws[f'D{row}'])
         row += 1
 
+    # Column widths
     ws.column_dimensions['A'].width = 25
     ws.column_dimensions['B'].width = 20
     ws.column_dimensions['C'].width = 20
-    ws.column_dimensions['D'].width = 45
 
 
 def create_calculated_metrics_sheet(wb, data_volume_gb_day, message_rate, avg_message_size_kb,
@@ -211,25 +199,29 @@ def create_calculated_metrics_sheet(wb, data_volume_gb_day, message_rate, avg_me
 
 def create_cost_breakdown_sheet(wb, costs, storage_cost, throughput_cost, network_cost,
                                  partition_cost, retention_overhead, data_volume_gb_day,
-                                 message_rate, retention_days, replication_factor, partitions,
-                                 num_ingests=0, confluent_cost_per_feed=976, gcp_cost_per_feed=773):
+                                 message_rate, retention_days, replication_factor, partitions):
     """Create ANNUAL COST BREAKDOWN sheet with formulas"""
     ws = wb.create_sheet("Cost Breakdown")
 
+    # Headers
     ws['A1'] = 'ANNUAL COST BREAKDOWN'
     ws['A1'].font = Font(bold=True, size=12)
 
-    for col, label, color in [('A', 'Component', "333333"), ('B', 'Annual Cost', "333333"),
-                               ('C', 'Monthly Cost', "333333"), ('D', 'Calculation', "4472C4")]:
-        ws[f'{col}2'] = label
-        apply_header_style(ws[f'{col}2'], fill_color=color)
+    ws['A2'] = 'Component'
+    ws['B2'] = 'Annual Cost'
+    ws['C2'] = 'Calculation'
+    apply_header_style(ws['A2'])
+    apply_header_style(ws['B2'])
+    apply_header_style(ws['C2'], fill_color="4472C4")
 
-    storage_annual = data_volume_gb_day * retention_days * replication_factor * storage_cost * 12
-    throughput_annual = (message_rate * 1) / 1024 * throughput_cost * 12
-    network_annual = data_volume_gb_day * 30 * network_cost * 12
-    partition_annual = partitions * partition_cost * 12
-    retention_cost_val = storage_annual * (retention_overhead / 100)
+    # Calculate individual costs
+    storage_annual = (data_volume_gb_day * retention_days * replication_factor * storage_cost * 12)
+    throughput_annual = ((message_rate * 1) / 1024 * throughput_cost * 12)  # Assuming 1KB avg
+    network_annual = (data_volume_gb_day * 30 * network_cost * 12)
+    partition_annual = (partitions * partition_cost * 12)
+    retention_cost = storage_annual * (retention_overhead / 100)
 
+    # Data rows with formulas as text
     cost_items = [
         ('Storage', storage_annual,
          f'{data_volume_gb_day:.0f} GB/day × {retention_days} days × {replication_factor} replicas × ${storage_cost}/GB × 12'),
@@ -239,50 +231,34 @@ def create_cost_breakdown_sheet(wb, costs, storage_cost, throughput_cost, networ
          f'{data_volume_gb_day:.0f} GB/day × 30 days × ${network_cost}/GB × 12'),
         ('Partitions', partition_annual,
          f'{partitions} partitions × ${partition_cost}/partition × 12'),
-        ('Retention', retention_cost_val,
-         f'Additional {retention_overhead}% for retention overhead'),
+        ('Retention', retention_cost,
+         f'Additional {retention_overhead}% for retention overhead')
     ]
-
-    if num_ingests > 0:
-        confluent_annual = num_ingests * confluent_cost_per_feed * 12
-        gcp_annual = num_ingests * gcp_cost_per_feed * 12
-        cost_items += [
-            ('Confluent (per feed)', confluent_annual,
-             f'{num_ingests} feed(s) × ${confluent_cost_per_feed}/feed/month × 12'),
-            ('GCP (per feed)', gcp_annual,
-             f'{num_ingests} feed(s) × ${gcp_cost_per_feed}/feed/month × 12'),
-        ]
 
     row = 3
     for component, annual, calc in cost_items:
         ws[f'A{row}'] = component
         ws[f'B{row}'] = round(annual, 0)
         ws[f'B{row}'].number_format = '$#,##0'
-        ws[f'C{row}'] = round(annual / 12, 0)
-        ws[f'C{row}'].number_format = '$#,##0'
-        ws[f'D{row}'] = calc
+        ws[f'C{row}'] = calc
         apply_cell_style(ws[f'A{row}'])
         apply_cell_style(ws[f'B{row}'])
         apply_cell_style(ws[f'C{row}'])
-        apply_cell_style(ws[f'D{row}'])
         row += 1
 
-    total = sum(item[1] for item in cost_items)
+    # Total row
+    total = sum([item[1] for item in cost_items])
     ws[f'A{row}'] = 'TOTAL'
     ws[f'B{row}'] = round(total, 0)
     ws[f'B{row}'].number_format = '$#,##0'
-    ws[f'C{row}'] = round(total / 12, 0)
-    ws[f'C{row}'].number_format = '$#,##0'
-    ws[f'D{row}'] = f'All components combined'
+    ws[f'C{row}'] = f'Monthly: ${round(total/12, 0):,}'
     apply_cell_style(ws[f'A{row}'], is_bold=True, bg_color="D9E9F7")
     apply_cell_style(ws[f'B{row}'], is_bold=True, bg_color="D9E9F7")
     apply_cell_style(ws[f'C{row}'], is_bold=True, bg_color="D9E9F7")
-    apply_cell_style(ws[f'D{row}'], is_bold=True, bg_color="D9E9F7")
 
-    ws.column_dimensions['A'].width = 22
-    ws.column_dimensions['B'].width = 18
-    ws.column_dimensions['C'].width = 18
-    ws.column_dimensions['D'].width = 65
+    ws.column_dimensions['A'].width = 20
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 70
 
 
 def create_cost_drivers_sheet(wb, data_volume_gb_day, message_rate, retention_days,
