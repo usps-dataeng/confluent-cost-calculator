@@ -1,0 +1,12 @@
+{
+  "total_partitions": 20224,
+  "total_storage_gb": 30844.17,
+  "network_annual": 120000,
+  "storage_annual": 180000,
+  "governance_annual": 42840,
+  "azure_ckus": 14,
+  "azure_rate": 1925,
+  "gcp_ckus": 28,
+  "gcp_rate": 1585,
+  "network_multiplier": 0.75
+}
