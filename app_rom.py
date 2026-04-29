@@ -1134,7 +1134,7 @@ with rom_col3:
 st.info(f"""
 **ROM Configuration:** {rom_results['total_feeds']} ingest(s) | {rom_results['records_per_day']:,} records/day | {size_config['partitions']:.2f} partitions per ingest (T-shirt size: {selected_size})
 
-**Pricing Method:** CKU-based (actual infrastructure costs)
+**Pricing Method:** T-shirt size scaled (Medium baseline × size multiplier)
 
 **Cost scales with:** Number of ingests ({rom_results['total_feeds']}), T-shirt size selection ({selected_size}), partition usage ({rom_results['partition_utilization_pct']:.2f}%), and daily volume ({rom_results['records_per_day']:,} records)
 """)

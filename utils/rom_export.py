@@ -34,11 +34,10 @@ def calculate_rom_costs(config):
 
     one_time_development = inbound_cost + outbound_cost + normalization_cost + workspace_setup
 
-    # USE HYBRID PRICING MODEL - Base cost per ingest + variable cost by partition usage
     # Get CKU configuration from config
     azure_ckus = config.get('azure_ckus', 14)
     azure_rate = config.get('azure_rate', 1925)
-    gcp_ckus = config.get('gcp_ckus', 28)
+    gcp_ckus = config.get('gcp_ckus', 34)
     gcp_rate = config.get('gcp_rate', 1585)
 
     # Get total resources
@@ -50,20 +49,30 @@ def calculate_rom_costs(config):
     network_annual = config.get('network_annual', 120000)
     governance_annual = config.get('governance_annual', 42840)
 
-    # Confluent cost: flat per-feed contract price ($976/month per ingest)
-    confluent_monthly_per_feed = config.get('confluent_monthly_cost', 976)
-    confluent_cost = confluent_monthly_per_feed * 12 * num_ingests
-
-    # GCP cost: flat per-feed contract price ($773/month per ingest)
-    gcp_monthly_per_feed = config.get('gcp_per_feed_monthly_cost', 773)
-    gcp_cost = gcp_monthly_per_feed * 12 * num_ingests
-
-    # Network cost: scales with actual partition share of the total network
+    # Partition utilization drives variable costs — t-shirt size determines the feed's share
     partition_utilization = total_partitions / TOTAL_PARTITIONS if TOTAL_PARTITIONS > 0 else 0
     partition_utilization = min(partition_utilization, 1.0)
+
+    # Base per-feed monthly costs (Medium baseline = 24 partitions)
+    confluent_monthly_per_feed = config.get('confluent_monthly_cost', 976)
+    gcp_monthly_per_feed = config.get('gcp_per_feed_monthly_cost', 773)
+    medium_partitions = 24  # Medium t-shirt baseline
+
+    # Size multiplier: scale costs relative to Medium (24 partitions per feed)
+    # Each feed's partition count is total_partitions / num_ingests
+    partitions_per_feed = total_partitions / num_ingests if num_ingests > 0 else medium_partitions
+    size_multiplier = partitions_per_feed / medium_partitions
+
+    # Confluent cost: base Medium rate scaled by t-shirt size
+    confluent_cost = confluent_monthly_per_feed * 12 * num_ingests * size_multiplier
+
+    # GCP cost: base Medium rate scaled by t-shirt size
+    gcp_cost = gcp_monthly_per_feed * 12 * num_ingests * size_multiplier
+
+    # Network cost: scales with partition share of total infrastructure
     network_cost = network_annual * partition_utilization
 
-    # Governance cost: scales with partition share (usage-based)
+    # Governance cost: scales with partition share
     governance_cost = governance_annual * partition_utilization
 
     first_year_cloud_cost = confluent_cost + gcp_cost + network_cost + governance_cost
@@ -806,7 +815,7 @@ def generate_rom_export_excel_cloud_only(config):
     gcp_monthly = config.get('gcp_per_feed_monthly_cost', config.get('gcp_per_feed_annual_cost', 773) / 12)
 
     # Get total partitions for reference
-    TOTAL_PARTITIONS = config.get('total_partitions', 20224)
+    TOTAL_PARTITIONS = config.get('total_partitions', 12034)
 
     assumptions = [
         f"ROM covers {results['total_feeds']} EEB ingest feed(s)",
