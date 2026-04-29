@@ -56,7 +56,7 @@ DEFAULT_ROM_CONFIG = {
     'project_name': '',
     'inbound_feeds': 1,
     'outbound_feeds': 1,
-    'de_hourly_rate': 80,
+    'de_hourly_rate': 155,
     'inbound_hours': 296,
     'outbound_hours': 254,
     'normalization_hours': 27.9,
@@ -145,6 +145,176 @@ st.markdown("""
 # Header
 st.markdown('<div class="main-header">🧮 Confluent Cloud Cost Calculator</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">T-Shirt Sizing ROM (Rough Order of Magnitude)</div>', unsafe_allow_html=True)
+
+# How to Use Guide
+with st.expander("📖 How to Use This Calculator", expanded=False):
+    st.markdown("""
+    ## Getting Started
+
+    This calculator produces two types of estimates for a Confluent Cloud data engineering project:
+
+    1. **ROM (Rough Order of Magnitude)** — A top-down estimate built from T-shirt sizes and per-feed rates. Use this for initial pricing conversations and TSLC submissions.
+    2. **Technical Model** — A bottom-up infrastructure cost estimate driven by raw throughput metrics (GB/day, records/day, message rate). Use this to validate T-shirt size selections or present detailed technical justification.
+
+    Follow the steps below in order. Most fields have sensible defaults — only change what is relevant to your project.
+
+    ---
+
+    ### Step 1 — Load Your Topic Data (Sidebar)
+
+    The calculator needs a topic list to determine partition counts and storage.
+
+    - **Databricks Table** (default): Enter the fully qualified table name and click "Load from Table."
+    - **Upload CSV**: Upload a topic list CSV exported from Confluent or another tool.
+
+    The CSV must have:
+    - Column 0: Topic Name
+    - Column 2: Number of Partitions
+    - Column 5: Storage (with units — TB, GB, MB, KB, or B)
+
+    Once loaded, the **Total Partitions** and **Total Storage** figures at the top of the page will populate.
+
+    ---
+
+    ### Step 2 — Open ROM Settings (Sidebar → 📊 ROM)
+
+    Click **ROM** in the sidebar. This is where you configure the engagement details.
+
+    #### Project Basics
+    | Field | What It Means | Guidance |
+    |---|---|---|
+    | **Project Name** | Appears in Excel export headers | Enter the client or project name |
+    | **Records per Day** | Daily records per ingest feed | Use the client's actual per-feed daily volume |
+    | **Number of Ingests** | How many separate ingest feed pipelines | One feed = one inbound + outbound topic pair |
+    | **DE Hourly Rate** | Blended Data Engineering hourly rate | **Default $155/hr — do not lower without approval.** |
+
+    #### Engineering Hours (per feed)
+    | Field | Default | What It Covers |
+    |---|---|---|
+    | Inbound Hours | 296 | Time to build one inbound ingest pipeline |
+    | Outbound Hours | 254 | Time to build one outbound data asset |
+    | Normalization Hours | 27.9 | Shared normalization work per feed |
+
+    Change these only if you have a specific SOW or delivery scope that differs from the standard pattern.
+
+    #### Cloud Costs (per feed, per month)
+    | Field | Default | Notes |
+    |---|---|---|
+    | Workspace Setup Cost | — | One-time environment provisioning |
+    | Confluent Monthly Cost | $976 | Per-feed Confluent Cloud recurring cost |
+    | GCP Per Feed Monthly | $773 | Per-feed GCP infrastructure cost |
+    | Escalation Rate | 0.034 (3.4%) | Applied to cloud costs in years 2–7. Synced with Cost Config panel. |
+
+    ---
+
+    ### Step 3 — Select a T-Shirt Size
+
+    T-shirt sizes define the Kafka partition count and storage footprint per feed.
+
+    | Size | Partitions | Storage |
+    |---|---|---|
+    | Small | 6 | 15 GB |
+    | Medium | 24 | 100 GB |
+    | Large | 50 | 250 GB |
+    | X-Large | 100 | 1,000 GB |
+    | XX-Large | 197 | 2,500 GB |
+
+    If unsure, **Medium** is a reasonable default for standard integrations. The T-shirt size applies uniformly across all feeds.
+
+    ---
+
+    ### Step 4 — Review the ROM Summary
+
+    The ROM Summary shows three headline numbers:
+    - **One-Time Engineering**: Total labor cost (number of ingests × hours per feed × DE rate)
+    - **First Year Cloud**: Year-one infrastructure cost (Confluent + GCP + Network + Governance)
+    - **7-Year Total**: Combined project cost over the full projection including annual escalation
+
+    ---
+
+    ### Step 5 — Technical Cost Model (Optional — Sidebar → ⚡ Technical)
+
+    The Technical Model is a bottom-up cross-check. Click **⚡ Technical** in the sidebar to open it.
+
+    #### Recommended workflow:
+    1. Complete your ROM settings first (Steps 1–4 above).
+    2. Click **Sync from ROM** inside the Technical Model panel. This automatically populates:
+       - GB per Day (derived from records/day × avg message size)
+       - Messages per Second (derived from total records/day ÷ 86,400)
+       - Partitions (T-shirt size × number of ingests)
+       - Number of Ingests and Records per Day (carried over directly)
+       - Confluent and GCP per-feed costs (pulled from ROM settings)
+    3. Review or adjust the individual fields if needed.
+
+    #### Technical Model Fields
+    | Section | Field | What to Enter |
+    |---|---|---|
+    | Data Volume | GB per Day | Total daily data volume across all feeds |
+    | Data Volume | Messages per Second | Derived from records/day — or enter directly |
+    | Data Volume | Avg Message Size (KB) | Per-record payload size in KB |
+    | Feed Scaling | Records per Day (Total) | Total records/day across all feeds (auto-filled on sync) |
+    | Feed Scaling | Number of Ingests | Total feed count (auto-filled on sync) |
+    | Configuration | Retention Days | How long data is retained in Kafka |
+    | Configuration | Partitions | Total partition count across all feeds |
+    | Configuration | Replication Factor | Usually 3 for production |
+    | Per-Feed Costs | Confluent $/Feed/Month | Auto-filled from ROM — edit if needed |
+    | Per-Feed Costs | GCP $/Feed/Month | Auto-filled from ROM — edit if needed |
+    | Performance | Peak to Average Ratio | Traffic spike multiplier (default 2.5) |
+
+    #### What the Technical Model calculates:
+    - **Calculated Storage**: GB/day × Retention Days × Replication Factor
+    - **Peak Throughput**: (records/day × avg message size) ÷ 86,400 × peak ratio
+    - **Cost Preview**: Storage + Throughput + Network + Partitions + (Confluent per feed × ingests) + (GCP per feed × ingests)
+
+    When **Number of Ingests > 0**, the Cost Preview expands to show Confluent and GCP annual cost columns alongside the infrastructure costs.
+
+    ---
+
+    ### Step 6 — Export Reports
+
+    Click **Export Reports** to download Excel files.
+
+    #### ROM Exports
+    | Export | When to Use |
+    |---|---|
+    | **DE TSLC** | Data Engineering labor costs formatted for TSLC submission |
+    | **Cloud Only** | Infrastructure costs only — for deals where DE is handled separately |
+    | **Complete** | Full ROM combining DE labor + cloud costs |
+
+    #### Technical Model Export
+    Available when the Technical Model panel is open. Downloads an Excel workbook with:
+    - **Input Parameters** sheet — all inputs including feed count, records/day, and per-feed rates
+    - **Cost Breakdown** sheet — annual and monthly costs with per-feed Confluent and GCP rows when applicable
+    - **Calculated Metrics**, **Methodology**, **Pricing**, **Optimization**, and **Assumptions** sheets
+
+    ---
+
+    ### Advanced: Cost Configuration (Sidebar → 💰 Cost)
+
+    Only change these if you have updated billing data:
+    - **CKU Configuration**: Azure and GCP Confluent Kafka Units and their monthly rates
+    - **Flat Annual Costs**: Storage, network, and governance costs shared across all feeds
+    - **Network Multiplier**: Scales the network cost allocation (default 0.75)
+
+    ---
+
+    ### Common Questions
+
+    **Why is the DE rate $155?**
+    The $155/hr rate is the standard blended rate for Data Engineering engagements. Do not lower it without specific direction from your engagement lead.
+
+    **What if my project has multiple feeds of different sizes?**
+    The calculator applies one T-shirt size uniformly across all ingests. If feeds vary significantly, run separate estimates per size tier and combine the totals manually.
+
+    **The escalation rate shows in two places — which one do I use?**
+    Either — they are the same value. "Annual Increase Rate (%)" in the Cost Configuration panel and "Escalation Rate" in ROM Settings both control the same number.
+
+    **When should I use the Technical Model vs the ROM?**
+    Use the ROM for initial client conversations, TSLC submissions, and deal sizing. Use the Technical Model when you need to show detailed infrastructure justification, validate a T-shirt size, or when a client asks how the number was derived.
+
+    **The Sync from ROM button didn't update the fields — why?**
+    Complete your ROM settings (records/day, number of ingests, T-shirt size) before clicking Sync. The sync reads from whatever is currently saved in the ROM panel.
+    """)
 
 # Sidebar for file upload and settings
 with st.sidebar:
